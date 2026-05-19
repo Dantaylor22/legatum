@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Sidebar from './components/Sidebar'
 import AuthPage from './pages/AuthPage'
@@ -16,6 +17,7 @@ function AppInner() {
   const [page, setPage] = useState('dashboard')
 
   useEffect(() => {
+    if (!user) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('success')) {
       toast.success('Payment successful — welcome to your new plan!')
@@ -23,16 +25,16 @@ function AppInner() {
       window.history.replaceState({}, '', '/')
     }
     if (params.get('cancelled')) {
-      toast('Payment cancelled')
+      toast('Payment cancelled — you have not been charged')
       window.history.replaceState({}, '', '/')
     }
-  }, [])
+  }, [user])
 
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--navy)' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 16 }}>Legatum</div>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--gold)', marginBottom: 16 }}>Digital Relative</div>
           <span className="spinner" />
         </div>
       </div>
