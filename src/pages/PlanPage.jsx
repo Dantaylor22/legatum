@@ -51,8 +51,8 @@ export default function PlanPage() {
         body: { priceId, userId: user.id, successUrl: window.location.origin + '/app?success=true', cancelUrl: window.location.origin + '/app?cancelled=true' },
       })
       if (error) throw error
-      const stripe = await stripePromise
-      await stripe.redirectToCheckout({ sessionId: data.sessionId })
+      // redirect directly using session URL
+      window.location.href = data.url || `https://checkout.stripe.com/pay/${data.sessionId}`
     } catch (e) {
       toast.error(e.message || 'Checkout failed')
     } finally {

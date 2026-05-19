@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,30 +9,46 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { priceId, userId, successUrl, cancelUrl } = await req.json()
+    const body = await req.json()
+    console.log('Request body:', JSON.stringify(body))
+
+    const { priceId, userId, successUrl, cancelUrl } = body
 
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-    if (!stripeKey) throw new Error('Stripe secret key not configured')
+    console.log('Stripe key present:', !!stripeKey)
+    if (!stripeKey) throw new Error('STRIPE_SECRET_KEY not set')
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    console.log('Supabase URL present:', !!supabaseUrl)
+    console.log('Supabase key present:', !!supabaseKey)
 
-    // Get user email
-    const { data: authData } = await supabase.auth.admin.getUserById(userId)
-    const email = authData?.user?.email
+    // Get user email directly from auth
+    const userRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': supabaseKey ?? '',
+      },
+    })
+    const userData = await userRes.json()
+    console.log('User fetch status:', userRes.status)
+    const email = userData?.email || ''
 
-    // Get or create Stripe customer via REST API
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('stripe_customer_id, full_name')
-      .eq('id', userId)
-      .single()
-
+    // Get profile
+    const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=stripe_customer_id,full_name`, {
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': supabaseKey ?? '',
+      },
+    })
+    const profiles = await profileRes.json()
+    console.log('Profile fetch status:', profileRes.status)
+    const profile = profiles?.[0]
     let customerId = profile?.stripe_customer_id
 
+    // Create Stripe customer if needed
     if (!customerId) {
+      console.log('Creating Stripe customer for:', email)
       const customerRes = await fetch('https://api.stripe.com/v1/customers', {
         method: 'POST',
         headers: {
@@ -41,17 +56,31 @@ serve(async (req) => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          email: email || '',
+          email,
           name: profile?.full_name || '',
           'metadata[supabase_user_id]': userId,
         }),
       })
       const customer = await customerRes.json()
+      console.log('Stripe customer result:', JSON.stringify(customer))
+      if (customer.error) throw new Error(`Stripe customer error: ${customer.error.message}`)
       customerId = customer.id
-      await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId)
+
+      // Save customer ID
+      await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey ?? '',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ stripe_customer_id: customerId }),
+      })
     }
 
-    // Create checkout session via REST API
+    // Create checkout session
+    console.log('Creating checkout session with price:', priceId)
     const sessionRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
@@ -70,15 +99,16 @@ serve(async (req) => {
         'subscription_data[metadata][supabase_user_id]': userId,
       }),
     })
-
     const session = await sessionRes.json()
-    if (session.error) throw new Error(session.error.message)
+    console.log('Checkout session result:', JSON.stringify(session))
+    if (session.error) throw new Error(`Stripe session error: ${session.error.message}`)
 
-    return new Response(JSON.stringify({ sessionId: session.id }), {
+    return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (err) {
+    console.error('Function error:', err.message)
     return new Response(JSON.stringify({ error: err.message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
