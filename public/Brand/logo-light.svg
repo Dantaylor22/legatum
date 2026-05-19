@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&amp;family=DM+Sans:wght@400&amp;display=swap');</style>
+  </defs>
+  <g transform="translate(40,40)">
+    <rect x="-5" y="8" width="10" height="34" rx="2" fill="#0d1b2a"/>
+    <path d="M-5,42 Q-16,50 -26,46 M5,42 Q16,50 26,46 M0,42 L0,50" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round"/>
+    <path d="M0,8 L0,-8 M0,-2 L-24,-22 M0,-2 L24,-22 M-24,-22 L-38,-38 M-24,-22 L-14,-40 M24,-22 L38,-38 M24,-22 L14,-40 M0,-8 L-10,-30 M0,-8 L10,-30" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="-38" cy="-43" r="8" fill="#0d1b2a"/>
+    <circle cx="-14" cy="-45" r="7" fill="#0d1b2a" opacity="0.85"/>
+    <circle cx="38" cy="-43" r="8" fill="#0d1b2a"/>
+    <circle cx="14" cy="-45" r="7" fill="#0d1b2a" opacity="0.85"/>
+    <circle cx="-10" cy="-35" r="6" fill="#0d1b2a" opacity="0.9"/>
+    <circle cx="10" cy="-35" r="6" fill="#0d1b2a" opacity="0.9"/>
+    <circle cx="0" cy="-52" r="9" fill="#0d1b2a"/>
+  </g>
+  <text x="92" y="34" font-family="'Cormorant Garamond',Georgia,serif" font-size="32" font-weight="600" fill="#0d1b2a">Digital Relative</text>
+  <text x="94" y="52" font-family="'DM Sans',sans-serif" font-size="9" fill="#5a7a94" letter-spacing="0.18em">SECURE LEGACY VAULT</text>
+</svg>
