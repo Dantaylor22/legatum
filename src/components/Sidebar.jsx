@@ -1,13 +1,19 @@
 import { useAuth } from '../context/AuthContext'
 import { PLANS } from '../lib/stripe'
+import NotificationBell from './NotificationBell'
 
 const NAV = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: '◈' },
-  { id: 'vault',         label: 'My Vault',      icon: '⬡' },
-  { id: 'beneficiaries', label: 'Beneficiaries', icon: '◉' },
-  { id: 'checkin',       label: 'Check-in',      icon: '◎' },
-  { id: 'plan',          label: 'My Plan',       icon: '◇' },
-  { id: 'settings',      label: 'Settings',      icon: '⚙' },
+  { id: 'dashboard',     label: 'Dashboard',        icon: '◈' },
+  { id: 'vault',         label: 'My Vault',         icon: '⬡' },
+  { id: 'documents',     label: 'Documents',        icon: '📁' },
+  { id: 'beneficiaries', label: 'Beneficiaries',    icon: '◉' },
+  { id: 'couples',       label: 'Couples vault',    icon: '💑', couplesOnly: true },
+  { id: 'family',        label: 'Family',           icon: '👨‍👩‍👧‍👦' },
+  { id: 'checkin',       label: 'Check-in',         icon: '◎' },
+  { id: 'afteriamgone',  label: 'After I\'m Gone',  icon: '💛' },
+  { id: 'sharedlinks',   label: 'Share links',       icon: '🔗' },
+  { id: 'plan',          label: 'My Plan',          icon: '◇' },
+  { id: 'settings',      label: 'Settings',         icon: '⚙' },
 ]
 
 function TreeMark({ size = 32 }) {
@@ -31,14 +37,14 @@ function TreeMark({ size = 32 }) {
 
 export default function Sidebar({ active, onNav }) {
   const { profile, signOut } = useAuth()
-  const planId = profile?.plan || 'free'
-  const plan = PLANS[planId] || PLANS.free
+  const planId   = profile?.plan || 'free'
+  const plan     = PLANS[planId] || PLANS.free
+  const isCouples = planId === 'couples'
 
   return (
     <aside style={{
       width: 'var(--sidebar)', minHeight: '100vh',
-      background: '#07111c',
-      borderRight: '1px solid var(--border)',
+      background: '#07111c', borderRight: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100,
     }}>
@@ -57,9 +63,9 @@ export default function Sidebar({ active, onNav }) {
 
       <div className="divider" style={{ margin: '0 16px 12px' }} />
 
-      {/* Navigation */}
+      {/* Nav */}
       <nav style={{ flex: 1, padding: '0 10px' }}>
-        {NAV.map(n => {
+        {NAV.filter(n => !n.couplesOnly || isCouples).map(n => {
           const isActive = active === n.id
           return (
             <button key={n.id} onClick={() => onNav(n.id)} style={{
@@ -80,10 +86,7 @@ export default function Sidebar({ active, onNav }) {
       </nav>
 
       {/* Plan badge */}
-      <div style={{
-        margin: '8px 14px 10px', padding: '12px 14px',
-        background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)',
-      }}>
+      <div style={{ margin: '8px 14px 10px', padding: '12px 14px', background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)' }}>
         <div style={{ fontSize: 10, color: 'var(--gold)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 3 }}>Plan</div>
         <div style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 500 }}>{plan.name}</div>
         {profile?.plan_renewal && (
@@ -93,7 +96,7 @@ export default function Sidebar({ active, onNav }) {
         )}
       </div>
 
-      {/* User + sign out */}
+      {/* User row + notification bell + sign out */}
       <div style={{ padding: '10px 14px 22px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 30, height: 30, borderRadius: '50%',
@@ -108,6 +111,7 @@ export default function Sidebar({ active, onNav }) {
             {profile?.full_name || 'My Account'}
           </div>
         </div>
+        <NotificationBell onNav={onNav} />
         <button onClick={signOut} title="Sign out" style={{
           background: 'transparent', border: 'none', color: 'var(--text-sub)',
           fontSize: 16, cursor: 'pointer', padding: '2px 4px', lineHeight: 1,

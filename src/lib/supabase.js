@@ -4,17 +4,18 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase env vars missing — running in demo mode')
+  console.warn('Supabase env vars missing')
 }
 
 export const supabase = createClient(
-  supabaseUrl || 'https://demo.supabase.co',
-  supabaseAnonKey || 'demo-key',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
+      flowType: 'pkce', // PKCE prevents auth code interception attacks
     },
   }
 )

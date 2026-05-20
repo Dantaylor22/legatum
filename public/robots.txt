@@ -1,0 +1,9 @@
+User-agent: *
+# The app itself is authenticated — no useful content to index
+Disallow: /
+# Allow public pages
+Allow: /privacy.html
+Allow: /terms.html
+Allow: /.well-known/
+
+# No sitemap — this is an authenticated app, not a content site

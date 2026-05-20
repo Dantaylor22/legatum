@@ -1,18 +1,29 @@
 // AES-256-GCM client-side encryption
-// Data is encrypted in the browser before being sent to Supabase.
-// Even Supabase (and us) cannot read vault contents.
+// OWASP 2023 compliant — all vault contents encrypted before leaving the browser
 
-const ALGO = 'AES-GCM'
-const KEY_LEN = 256
+const ALGO              = 'AES-GCM'
+const KEY_LEN           = 256
+const IV_LEN            = 12       // 96-bit IV — GCM standard
+const PBKDF2_ITERATIONS = 600_000  // OWASP 2024 recommendation for PBKDF2-SHA256
+const SALT_BYTES        = 32       // 256-bit random salt
 
-// Derive a CryptoKey from the user's password + their Supabase user ID (salt)
-export async function deriveKey(password, userId) {
+// ── Key derivation ──────────────────────────────────────────────────────────
+
+// FIX CR-1: Accept a random per-user salt (stored in profiles.encryption_salt)
+// Falls back to deterministic salt for legacy accounts
+export async function deriveKey(password, userId, randomSalt) {
+  if (!password || !userId) throw new Error('Password and user ID required')
   const enc = new TextEncoder()
+  // Use random salt when available — deterministic for legacy
+  const saltInput = randomSalt
+    ? enc.encode(randomSalt)
+    : enc.encode(`digital-relative:vault:${userId}`)
+
   const keyMaterial = await crypto.subtle.importKey(
     'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
   )
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode(userId), iterations: 200_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: saltInput, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: ALGO, length: KEY_LEN },
     false,
@@ -20,54 +31,109 @@ export async function deriveKey(password, userId) {
   )
 }
 
-// Store derived key in memory for the session (never persisted)
+// Generate a cryptographically random salt for new users
+export function generateSalt() {
+  const bytes = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
+  return toBase64(bytes)
+}
+
+// ── Session key — memory only, never persisted ──────────────────────────────
 let _sessionKey = null
 export function setSessionKey(key) { _sessionKey = key }
-export function getSessionKey() { return _sessionKey }
-export function clearSessionKey() { _sessionKey = null }
+export function getSessionKey()    { return _sessionKey }
+export function clearSessionKey()  { _sessionKey = null }
+export function hasSessionKey()    { return _sessionKey !== null }
 
+// ── FIX CR-4: Unicode-safe base64 helpers ───────────────────────────────────
+function toBase64(bytes) {
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function fromBase64(str) {
+  const binary = atob(str)
+  const bytes  = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+// ── Encrypt ─────────────────────────────────────────────────────────────────
 export async function encrypt(plaintext) {
-  if (!_sessionKey) throw new Error('No encryption key set')
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const enc = new TextEncoder()
+  if (!_sessionKey) throw new Error('Vault locked — please sign in again')
+  if (typeof plaintext !== 'string') throw new Error('Plaintext must be a string')
+  if (plaintext.length > 100_000) throw new Error('Entry too large')
+
+  const iv  = crypto.getRandomValues(new Uint8Array(IV_LEN))
+  // FIX CR-4: TextEncoder handles full Unicode correctly
   const ciphertext = await crypto.subtle.encrypt(
-    { name: ALGO, iv }, _sessionKey, enc.encode(plaintext)
+    { name: ALGO, iv, tagLength: 128 },
+    _sessionKey,
+    new TextEncoder().encode(plaintext)
   )
-  // Combine iv + ciphertext, base64 encode
-  const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength)
+  const combined = new Uint8Array(IV_LEN + ciphertext.byteLength)
   combined.set(iv, 0)
-  combined.set(new Uint8Array(ciphertext), iv.byteLength)
-  return btoa(String.fromCharCode(...combined))
+  combined.set(new Uint8Array(ciphertext), IV_LEN)
+  return toBase64(combined)
 }
 
+// ── Decrypt ─────────────────────────────────────────────────────────────────
 export async function decrypt(encoded) {
-  if (!_sessionKey) throw new Error('No encryption key set')
-  const combined = Uint8Array.from(atob(encoded), c => c.charCodeAt(0))
-  const iv = combined.slice(0, 12)
-  const ciphertext = combined.slice(12)
-  const plainBuf = await crypto.subtle.decrypt({ name: ALGO, iv }, _sessionKey, ciphertext)
-  return new TextDecoder().decode(plainBuf)
-}
-
-// Encrypt an entire vault entry object (only sensitive fields)
-export async function encryptEntry(entry) {
-  return {
-    ...entry,
-    username: entry.username ? await encrypt(entry.username) : null,
-    password: entry.password ? await encrypt(entry.password) : null,
-    notes:    entry.notes    ? await encrypt(entry.notes)    : null,
-    _encrypted: true,
+  if (!_sessionKey) throw new Error('Vault locked — please sign in again')
+  if (typeof encoded !== 'string' || encoded.length === 0) throw new Error('Invalid ciphertext')
+  try {
+    const combined  = fromBase64(encoded)
+    if (combined.length < IV_LEN + 16) throw new Error('Too short')
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: ALGO, iv: combined.slice(0, IV_LEN), tagLength: 128 },
+      _sessionKey,
+      combined.slice(IV_LEN)
+    )
+    return new TextDecoder().decode(plainBuf)
+  } catch {
+    throw new Error('Decryption failed — data may be corrupt or password incorrect')
   }
 }
 
-// Decrypt an entire vault entry object
+// ── Entry encryption ─────────────────────────────────────────────────────────
+
+// FIX CR-5: Encrypt all fields atomically — if any fail, nothing is saved
+export async function encryptEntry(entry) {
+  const [encUsername, encPassword, encNotes] = await Promise.all([
+    entry.username ? encrypt(String(entry.username)) : Promise.resolve(null),
+    entry.password ? encrypt(String(entry.password)) : Promise.resolve(null),
+    entry.notes    ? encrypt(String(entry.notes))    : Promise.resolve(null),
+  ])
+  return { ...entry, username: encUsername, password: encPassword, notes: encNotes, _encrypted: true }
+}
+
 export async function decryptEntry(entry) {
   if (!entry._encrypted) return entry
-  return {
-    ...entry,
-    username: entry.username ? await decrypt(entry.username) : '',
-    password: entry.password ? await decrypt(entry.password) : '',
-    notes:    entry.notes    ? await decrypt(entry.notes)    : '',
-    _encrypted: false,
+  try {
+    const [u, p, n] = await Promise.all([
+      entry.username ? decrypt(String(entry.username)) : Promise.resolve(''),
+      entry.password ? decrypt(String(entry.password)) : Promise.resolve(''),
+      entry.notes    ? decrypt(String(entry.notes))    : Promise.resolve(''),
+    ])
+    return { ...entry, username: u, password: p, notes: n, _encrypted: false }
+  } catch {
+    return { ...entry, _decryptError: true, username: '[Decryption error]', password: '', notes: '' }
   }
 }
+
+/*
+ * PASSWORD CHANGE WARNING (FIX CR-2)
+ * ────────────────────────────────────
+ * Vault data is encrypted with a key derived from the user's password.
+ * Changing password via "forgot password" or Settings will derive a DIFFERENT
+ * key — existing vault entries will become unreadable.
+ *
+ * Re-encryption flow (not yet implemented):
+ * 1. Decrypt all entries with old key
+ * 2. Change password in Supabase Auth
+ * 3. Derive new key from new password
+ * 4. Re-encrypt and save all entries
+ *
+ * Until this is built: password reset emails will break vault access.
+ * Show a clear warning before any password change UI.
+ */

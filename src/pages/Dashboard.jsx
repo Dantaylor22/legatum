@@ -18,7 +18,15 @@ export default function Dashboard({ onNav }) {
   const stats = [
     { label: 'Vault entries',   value: vLoading ? '…' : entries.length,       sub: `across ${cats} categories` },
     { label: 'Beneficiaries',   value: bLoading ? '…' : beneficiaries.length, sub: `${confirmed} confirmed` },
-    { label: 'Check-in status', value: 'Active',                               sub: 'Next due in 30 days' },
+    { label: 'Check-in status',
+     value: profile?.last_checkin ? (
+       Date.now() - new Date(profile.last_checkin).getTime() > (profile?.checkin_frequency_days || 30) * 86400000
+         ? '⚠️ Overdue' : '✓ Active'
+     ) : 'Not set',
+     sub: profile?.last_checkin
+       ? `Next due: ${new Date(new Date(profile.last_checkin).getTime() + (profile?.checkin_frequency_days || 30) * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+       : 'Check in to activate the switch'
+   },
     { label: 'Vault health',    value: entries.length > 0 ? 'Good' : 'Empty',  sub: entries.length > 0 ? 'Entries added' : 'Add your first entry' },
   ]
 

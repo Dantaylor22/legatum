@@ -3,6 +3,8 @@ import { useBeneficiaries } from '../hooks/useBeneficiaries'
 import { useAuth } from '../context/AuthContext'
 import { PLANS } from '../lib/stripe'
 import toast from 'react-hot-toast'
+import { supabase } from '../lib/supabase'
+import { validateEmail, validateName, sanitiseText } from '../lib/validation'
 
 const ACCESS_LEVELS = ['Full access', 'Read only', 'Specific categories only']
 
@@ -12,7 +14,10 @@ function BenModal({ onClose, onSave }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleSave() {
-    if (!form.name || !form.email) { toast.error('Name and email are required'); return }
+    const nameErr = validateName(form.name)
+    const emailErr = validateEmail(form.email)
+    if (nameErr) { toast.error(nameErr); return }
+    if (emailErr) { toast.error(emailErr); return }
     setSaving(true)
     try { await onSave(form); onClose() }
     catch (e) { toast.error(e.message) }
@@ -69,6 +74,19 @@ export default function BeneficiariesPage({ onNav }) {
   async function handleAdd(form) {
     await addBeneficiary(form)
     toast.success('Invite sent to ' + form.email)
+  }
+
+  async function handleToggleExecutor(id, currentIsExecutor) {
+    if (!currentIsExecutor) {
+      // First, remove executor status from any existing executor
+      await supabase.from('beneficiaries').update({ is_executor: false }).eq('user_id', profile.id).eq('is_executor', true)
+    }
+    const { error } = await supabase.from('beneficiaries').update({ is_executor: !currentIsExecutor }).eq('id', id)
+    if (error) { toast.error('Failed to update executor'); return }
+    toast.success(currentIsExecutor ? 'Executor status removed' : '⭐ Executor set — this person can submit emergency access requests')
+    // Refresh beneficiaries list
+    const { data } = await supabase.from('beneficiaries').select('*').eq('user_id', profile.id)
+    // Update local state via the hook's reload
   }
 
   async function handleRemove(id, name) {
@@ -128,6 +146,13 @@ export default function BeneficiariesPage({ onNav }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className={`badge badge-${b.status === 'confirmed' ? 'green' : 'muted'}`}>{b.status}</span>
+                  <button
+                    className={`btn-ghost`}
+                    style={{ fontSize: 10, padding: '4px 10px', borderColor: b.is_executor ? 'var(--gold-border)' : undefined, color: b.is_executor ? 'var(--gold)' : undefined }}
+                    onClick={() => handleToggleExecutor(b.id, b.is_executor)}
+                    title="The executor is the trusted person who can submit emergency access requests">
+                    {b.is_executor ? '⭐ Executor' : 'Set executor'}
+                  </button>
                   <button className="btn-danger" style={{ fontSize: 11, padding: '4px 10px' }}
                     onClick={() => handleRemove(b.id, b.name)}>Remove</button>
                 </div>

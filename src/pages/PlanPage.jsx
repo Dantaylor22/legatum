@@ -52,7 +52,12 @@ export default function PlanPage() {
       })
       if (error) throw error
       // redirect directly using session URL
-      window.location.href = data.url || `https://checkout.stripe.com/pay/${data.sessionId}`
+      // Validate URL before redirect — prevent open redirect
+      const redirectUrl = data.url
+      if (!redirectUrl || !redirectUrl.startsWith('https://checkout.stripe.com/')) {
+        throw new Error('Invalid checkout URL received')
+      }
+      window.location.href = redirectUrl
     } catch (e) {
       toast.error(e.message || 'Checkout failed')
     } finally {
@@ -185,8 +190,14 @@ export default function PlanPage() {
             ))}
           </div>
           <button className="btn-ghost" style={{ marginTop: 16, fontSize: 12 }}
-            onClick={() => toast('Manage billing in Stripe Customer Portal')}>
-            Manage billing →
+            onClick={async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke('create-portal', { body: { userId: user.id } })
+                if (error || !data?.url) { toast.error('Could not open billing portal'); return }
+                window.location.href = data.url
+              } catch { toast.error('Could not open billing portal') }
+            }}>
+            Manage or cancel subscription →
           </button>
         </div>
       )}

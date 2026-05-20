@@ -41,14 +41,74 @@ function AppleIcon() {
   )
 }
 
+function ForgotPasswordModal({ onClose }) {
+  const [email, setEmail]   = useState('')
+  const [sent, setSent]     = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  async function handleReset() {
+    if (!email) { toast.error('Enter your email address'); return }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      })
+      if (error) throw error
+      setSent(true)
+    } catch (err) {
+      toast.error(err.message || 'Could not send reset email')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>✉️</div>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 10 }}>Check your email</div>
+            <div style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.7 }}>
+              We sent a password reset link to <strong style={{ color: 'var(--text)' }}>{email}</strong>.
+              Check your spam folder if it doesn't arrive.
+            </div>
+            <button className="btn-ghost" style={{ marginTop: 24 }} onClick={onClose}>Close</button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>Reset your password</div>
+            <div style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 20, lineHeight: 1.6 }}>
+              Enter your email address and we'll send you a link to reset your password.
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="label">Email address</label>
+              <input className="input" type="email" placeholder="you@email.com"
+                value={email} onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleReset()} autoFocus />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn-ghost" onClick={onClose}>Cancel</button>
+              <button className="btn-primary" onClick={handleReset} disabled={loading}>
+                {loading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Send reset link'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AuthPage() {
   const { signIn, signUp } = useAuth()
-  const [mode, setMode]         = useState('signin')
-  const [loading, setLoading]   = useState(false)
+  const [mode, setMode]           = useState('signin')
+  const [loading, setLoading]     = useState(false)
   const [oauthLoading, setOauthLoading] = useState(null)
   const [mfaRequired, setMfaRequired]   = useState(false)
   const [mfaCode, setMfaCode]           = useState('')
   const [factorId, setFactorId]         = useState(null)
+  const [showForgot, setShowForgot]     = useState(false)
   const [form, setForm] = useState({ email: '', password: '', fullName: '', confirmPassword: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -71,23 +131,25 @@ export default function AuthPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (mode === 'signup' && form.password !== form.confirmPassword) { toast.error('Passwords do not match'); return }
-    if (form.password.length < 10) { toast.error('Password must be at least 10 characters'); return }
+    if (mode === 'signup' && form.password !== form.confirmPassword) {
+      toast.error('Passwords do not match'); return
+    }
+    if (mode === 'signup' && form.password.length < 10) {
+      toast.error('Password must be at least 10 characters'); return
+    }
     setLoading(true)
     try {
       if (mode === 'signin') {
         const result = await signIn({ email: form.email, password: form.password })
-        // Check if MFA is required
         if (result?.nextStep === 'mfa') {
           setFactorId(result.factorId)
           setMfaRequired(true)
-          toast('Please enter your authenticator code')
         } else {
           toast.success('Welcome back')
         }
       } else {
         await signUp({ email: form.email, password: form.password, fullName: form.fullName })
-        toast.success('Account created — check your email to confirm, then set up 2FA in Settings')
+        toast.success('Account created — check your email to confirm')
       }
     } catch (err) {
       toast.error(err.message || 'Something went wrong')
@@ -100,10 +162,7 @@ export default function AuthPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId,
-        code: mfaCode,
-      })
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: mfaCode })
       if (error) throw error
       toast.success('Welcome back')
     } catch (err) {
@@ -113,12 +172,11 @@ export default function AuthPage() {
     }
   }
 
-  const btnStyle = {
-    width: '100%', padding: '11px', borderRadius: 'var(--r)',
-    fontSize: 13, fontFamily: 'var(--sans)', fontWeight: 500,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-    cursor: 'pointer', transition: 'all 0.15s', border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.05)', color: 'var(--text)',
+  const oauthBtnStyle = {
+    width: '100%', padding: '11px', borderRadius: 'var(--r)', fontSize: 13,
+    fontFamily: 'var(--sans)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+    border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)',
+    color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
   }
 
   return (
@@ -128,6 +186,8 @@ export default function AuthPage() {
       backgroundImage: 'radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%)',
     }}>
       <div style={{ width: 420, maxWidth: '92vw' }}>
+
+        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
             <TreeLogo size={64} />
@@ -136,39 +196,44 @@ export default function AuthPage() {
           <div style={{ fontSize: 11, color: 'var(--text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase', marginTop: 6 }}>Secure Legacy Vault</div>
         </div>
 
+        {/* MFA screen */}
         {mfaRequired ? (
           <div className="card-static fade-up" style={{ padding: 32 }}>
             <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>Two-factor authentication</div>
             <div style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 20 }}>Enter the 6-digit code from your authenticator app.</div>
             <form onSubmit={handleMFA} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <input className="input" placeholder="000000" value={mfaCode} onChange={e => setMfaCode(e.target.value)}
-                maxLength={6} style={{ textAlign: 'center', fontSize: 22, letterSpacing: '0.3em' }} autoFocus />
+              <input className="input" placeholder="000000" value={mfaCode}
+                onChange={e => setMfaCode(e.target.value)} maxLength={6}
+                style={{ textAlign: 'center', fontSize: 22, letterSpacing: '0.3em' }} autoFocus />
               <button className="btn-primary" type="submit" disabled={loading || mfaCode.length !== 6} style={{ width: '100%', padding: 12 }}>
                 {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Verify'}
               </button>
             </form>
           </div>
+
         ) : (
           <div className="card-static fade-up" style={{ padding: 32 }}>
+
             {/* OAuth buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-              <button style={btnStyle} onClick={() => handleOAuth('google')} disabled={!!oauthLoading}>
+              <button style={oauthBtnStyle} onClick={() => handleOAuth('google')} disabled={!!oauthLoading}>
                 {oauthLoading === 'google' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <GoogleIcon />}
                 Continue with Google
               </button>
-              <button style={btnStyle} onClick={() => handleOAuth('apple')} disabled={!!oauthLoading}>
+              <button style={oauthBtnStyle} onClick={() => handleOAuth('apple')} disabled={!!oauthLoading}>
                 {oauthLoading === 'apple' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <AppleIcon />}
                 Continue with Apple
               </button>
             </div>
 
+            {/* Divider */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
               <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               <span style={{ fontSize: 12, color: 'var(--text-sub)' }}>or</span>
               <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
             </div>
 
-            {/* Email/password tabs */}
+            {/* Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--r)', padding: 4 }}>
               {['signin', 'signup'].map(m => (
                 <button key={m} onClick={() => setMode(m)} style={{
@@ -182,25 +247,51 @@ export default function AuthPage() {
               ))}
             </div>
 
+            {/* Form */}
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {mode === 'signup' && (
                 <div>
                   <label className="label">Full name</label>
-                  <input className="input" type="text" placeholder="Jane Smith" value={form.fullName} onChange={e => set('fullName', e.target.value)} required />
+                  <input className="input" type="text" placeholder="Jane Smith"
+                    value={form.fullName} onChange={e => set('fullName', e.target.value)} required />
                 </div>
               )}
               <div>
                 <label className="label">Email address</label>
-                <input className="input" type="email" placeholder="you@email.com" value={form.email} onChange={e => set('email', e.target.value)} required />
+                <input className="input" type="email" placeholder="you@email.com"
+                  value={form.email} onChange={e => set('email', e.target.value)} required />
               </div>
               <div>
-                <label className="label">Password {mode === 'signup' && '(min. 10 characters)'}</label>
-                <input className="input" type="password" placeholder="••••••••••" value={form.password} onChange={e => set('password', e.target.value)} required />
+                <label className="label">
+                  Password {mode === 'signup' && <span style={{ color: 'var(--text-sub)' }}>(min. 10 characters)</span>}
+                </label>
+                <input className="input" type="password" placeholder="••••••••••"
+                  value={form.password} onChange={e => set('password', e.target.value)} required />
               </div>
+              {mode === 'signup' && form.password.length > 0 && (
+                <div style={{ marginTop: -8, marginBottom: 4 }}>
+                  {(() => {
+                    const p = form.password
+                    const score = [p.length >= 12, /[A-Z]/.test(p), /[0-9]/.test(p), /[^A-Za-z0-9]/.test(p)].filter(Boolean).length
+                    const labels = ['Weak', 'Fair', 'Good', 'Strong']
+                    const colours = ['#e05252', '#e8a44c', '#c9a84c', '#4caf82']
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
+                          <div style={{ width: `${(score / 4) * 100}%`, height: '100%', background: colours[score - 1] || colours[0], borderRadius: 2, transition: 'width 0.3s' }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: colours[score - 1] || colours[0], width: 44 }}>{labels[score - 1] || 'Weak'}</span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
               {mode === 'signup' && (
                 <div>
                   <label className="label">Confirm password</label>
-                  <input className="input" type="password" placeholder="••••••••••" value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} required />
+                  <input className="input" type="password" placeholder="••••••••••"
+                    value={form.confirmPassword} onChange={e => set('confirmPassword', e.target.value)} required />
                 </div>
               )}
               {mode === 'signup' && (
@@ -208,9 +299,22 @@ export default function AuthPage() {
                   🔒 AES-256 encrypted · MFA required · EU data storage
                 </div>
               )}
-              <button className="btn-primary" type="submit" disabled={loading} style={{ marginTop: 4, width: '100%', padding: 12 }}>
+              <button className="btn-primary" type="submit" disabled={loading}
+                style={{ marginTop: 4, width: '100%', padding: 12 }}>
                 {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : mode === 'signin' ? 'Sign in' : 'Create account'}
               </button>
+
+              {/* Forgot password */}
+              {mode === 'signin' && (
+                <div style={{ textAlign: 'center' }}>
+                  <button type="button" onClick={() => setShowForgot(true)} style={{
+                    background: 'transparent', border: 'none', color: 'var(--text-sub)',
+                    fontSize: 12, cursor: 'pointer', textDecoration: 'underline',
+                  }}>
+                    Forgot your password?
+                  </button>
+                </div>
+              )}
             </form>
 
             {mode === 'signup' && (
@@ -227,6 +331,8 @@ export default function AuthPage() {
           AES-256 encrypted · MFA enforced · GDPR compliant · EU storage
         </p>
       </div>
+
+      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
     </div>
   )
 }

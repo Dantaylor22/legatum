@@ -1,7 +1,8 @@
 import { loadStripe } from '@stripe/stripe-js'
 
 const key = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
-export const stripePromise = loadStripe(key || '')
+// FIX TP-5: Only load Stripe if key is present
+export const stripePromise = key ? loadStripe(key) : Promise.resolve(null)
 
 export const PRICES = {
   single_annual:   'price_1TYuBBAT0bYW1W6mK3STHKbN',
@@ -26,7 +27,7 @@ export const PLANS = {
     id: 'couples', name: 'Couples', price: '£5', period: '/month',
     annualPrice: '£45/year',
     entryLimit: Infinity, beneficiaryLimit: 5, storageGB: 5,
-    deadMansSwitch: true, fileUploads: true, vaults: 2,
+    deadMansSwitch: true, fileUploads: true, // partner vaults coming soon
     priceId: PRICES.couples_monthly,
     annualPriceId: PRICES.couples_annual,
   },

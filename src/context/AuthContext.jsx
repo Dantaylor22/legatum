@@ -1,13 +1,38 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { deriveKey, setSessionKey, clearSessionKey } from '../lib/crypto'
 
 const AuthContext = createContext(null)
 
+// Auto-lock vault after 30 minutes of inactivity
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const inactivityTimer       = useRef(null)
+
+  // Reset inactivity timer on user activity
+  function resetInactivityTimer() {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    inactivityTimer.current = setTimeout(() => {
+      // Lock vault (clear key) but keep session — user must re-enter password to decrypt
+      clearSessionKey()
+      console.info('Vault locked due to inactivity')
+    }, INACTIVITY_TIMEOUT_MS)
+  }
+
+  useEffect(() => {
+    // Listen for user activity
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll']
+    events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }))
+    resetInactivityTimer()
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetInactivityTimer))
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -15,11 +40,16 @@ export function AuthProvider({ children }) {
       if (session?.user) fetchProfile(session.user.id)
       setLoading(false)
     })
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
-      else { setProfile(null); clearSessionKey() }
+      else {
+        setProfile(null)
+        clearSessionKey()
+      }
     })
+
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -34,14 +64,20 @@ export function AuthProvider({ children }) {
 
   async function signUp({ email, password, fullName }) {
     const { data, error } = await supabase.auth.signUp({
-      email, password,
+      email,
+      password,
       options: { data: { full_name: fullName } },
     })
     if (error) throw error
-    // Derive encryption key from password + user id
+    // Do NOT derive a key from the password here.
+    // Email users go through VaultPinSetup immediately after signup,
+    // which derives the real key from their PIN + a fresh random salt.
+    // Deriving a password-based key here would:
+    //   a) use the old deterministic salt (no random salt yet)
+    //   b) be immediately overwritten by VaultPinSetup anyway
+    // So we just start the inactivity timer and let VaultPinSetup handle keying.
     if (data.user) {
-      const key = await deriveKey(password, data.user.id)
-      setSessionKey(key)
+      resetInactivityTimer()
     }
     return data
   }
@@ -49,24 +85,32 @@ export function AuthProvider({ children }) {
   async function signIn({ email, password }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // Derive encryption key
     const key = await deriveKey(password, data.user.id)
     setSessionKey(key)
+    resetInactivityTimer()
     return data
   }
 
   async function signOut() {
     clearSessionKey()
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
     await supabase.auth.signOut()
   }
 
   async function updateProfile(updates) {
+    // Whitelist allowed fields — prevent client escalating plan
+    const safeFields = ['full_name', 'last_checkin', 'checkin_frequency_days']
+    const safeUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([k]) => safeFields.includes(k))
+    )
+    if (Object.keys(safeUpdates).length === 0) throw new Error('No valid fields to update')
+
     const { error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(safeUpdates)
       .eq('id', user.id)
     if (error) throw error
-    setProfile(prev => ({ ...prev, ...updates }))
+    setProfile(prev => ({ ...prev, ...safeUpdates }))
   }
 
   return (

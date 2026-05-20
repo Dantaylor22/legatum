@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ChangePasswordPage from './ChangePasswordPage'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -8,6 +9,7 @@ export default function SettingsPage() {
   const [name, setName]               = useState(profile?.full_name || '')
   const [saving, setSaving]           = useState(false)
   const [deleting, setDeleting]       = useState(false)
+  const [showChangePIN, setShowChangePIN] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState('')
   const [mfaFactors, setMfaFactors]   = useState([])
   const [showMfaSetup, setShowMfaSetup] = useState(false)
@@ -17,6 +19,10 @@ export default function SettingsPage() {
   const [mfaCode, setMfaCode]         = useState('')
   const [verifying, setVerifying]     = useState(false)
   const isOAuth = user?.app_metadata?.provider === 'google' || user?.app_metadata?.provider === 'apple'
+
+  if (showChangePIN) {
+    return <ChangePasswordPage onBack={() => setShowChangePIN(false)} />
+  }
 
   useEffect(() => {
     loadMfaFactors()
@@ -77,7 +83,15 @@ export default function SettingsPage() {
         supabase.from('beneficiaries').select('*').eq('user_id', user.id),
         supabase.from('profiles').select('*').eq('id', user.id).single(),
       ])
-      const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), profile: prof, vault_entries: entries, beneficiaries: bens }, null, 2)], { type: 'application/json' })
+      const exportPayload = {
+        exported_at: new Date().toISOString(),
+        encryption_notice: "vault_entries fields (username, password, notes) are AES-256-GCM encrypted. They cannot be read without your master password.",
+        gdpr_basis: "GDPR Article 20 — Right to data portability",
+        profile: prof,
+        vault_entries: entries,
+        beneficiaries: bens,
+      }
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `digital-relative-export-${Date.now()}.json` })
       a.click()
       toast.dismiss(id); toast.success('Data exported')
@@ -181,10 +195,21 @@ export default function SettingsPage() {
           <p style={{ fontSize: 13, color: 'var(--text-sub)', marginBottom: 14 }}>
             Your vault is encrypted with AES-256-GCM using a key derived from your password. Even Digital Relative cannot read your data.
           </p>
-          <button className="btn-ghost" style={{ fontSize: 12 }} onClick={async () => {
-            await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.origin })
-            toast.success('Password reset email sent')
-          }}>Send password reset email</button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowChangePIN(true)}>
+              Change vault PIN
+            </button>
+            <button className="btn-ghost" style={{ fontSize: 12 }} onClick={async () => {
+              if (!confirm('Sending a password reset email will break your vault access until you re-encrypt it.\n\nYour vault PIN is separate from your login password — consider using "Change vault PIN" instead.\n\nContinue with password reset?')) return
+              await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.origin })
+              toast.success('Password reset email sent — your vault PIN will need updating after reset')
+            }}>
+              Reset login password
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 8, lineHeight: 1.6 }}>
+            Your vault PIN (used to encrypt your data) is separate from your login password. Use "Change vault PIN" to safely re-encrypt your vault.
+          </div>
         </div>
       )}
 

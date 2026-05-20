@@ -1,92 +1,134 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = new Set([
+  'https://digitalrelative.co.uk',
+  'https://www.digitalrelative.co.uk',
+  'https://legatum-chi.vercel.app',
+])
+
+// FIX EF-2: Return no CORS headers for unknown origins so preflight fails
+function corsHeaders(origin: string): Record<string, string> {
+  if (!ALLOWED_ORIGINS.has(origin)) return {}
+  return {
+    'Access-Control-Allow-Origin':  origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  }
+}
+
+const VALID_PRICE_IDS = new Set([
+  Deno.env.get('STRIPE_PRICE_SINGLE_ANNUAL')   || '',
+  Deno.env.get('STRIPE_PRICE_COUPLES_MONTHLY') || '',
+  Deno.env.get('STRIPE_PRICE_COUPLES_ANNUAL')  || '',
+].filter(Boolean))
+
+const VALID_REDIRECT_ORIGINS = [
+  'https://digitalrelative.co.uk',
+  'https://legatum-chi.vercel.app',
+]
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// FIX EF-9: Wrap fetch with timeout
+async function fetchWithTimeout(url: string, opts: RequestInit, ms = 10_000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const origin = req.headers.get('origin') || ''
+  const hdrs   = corsHeaders(origin)
+
+  if (req.method === 'OPTIONS') {
+    return Object.keys(hdrs).length
+      ? new Response('ok', { headers: hdrs })
+      : new Response('Forbidden', { status: 403 })
+  }
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+
+  const authHeader = req.headers.get('Authorization') || ''
+  if (!authHeader.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorised' }), {
+      status: 401, headers: { ...hdrs, 'Content-Type': 'application/json' },
+    })
+  }
+  const jwt = authHeader.slice(7)
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')        || ''
+  const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+  const stripeKey   = Deno.env.get('STRIPE_SECRET_KEY')   || ''
 
   try {
-    const body = await req.json()
-    console.log('Request body:', JSON.stringify(body))
+    const body = await req.json().catch(() => null)
+    if (!body) return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: hdrs })
 
     const { priceId, userId, successUrl, cancelUrl } = body
 
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-    console.log('Stripe key present:', !!stripeKey)
-    if (!stripeKey) throw new Error('STRIPE_SECRET_KEY not set')
+    if (!priceId || !userId || !successUrl || !cancelUrl)
+      throw new Error('Missing required fields')
+    if (!VALID_PRICE_IDS.has(priceId))
+      throw new Error('Invalid price ID')
+    if (!UUID_RE.test(userId))
+      throw new Error('Invalid user ID format')
+    if (!VALID_REDIRECT_ORIGINS.some(o => successUrl.startsWith(o)))
+      throw new Error('Invalid redirect URL')
+    if (!VALID_REDIRECT_ORIGINS.some(o => cancelUrl.startsWith(o)))
+      throw new Error('Invalid redirect URL')
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    console.log('Supabase URL present:', !!supabaseUrl)
-    console.log('Supabase key present:', !!supabaseKey)
-
-    // Get user email directly from auth
-    const userRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${userId}`, {
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'apikey': supabaseKey ?? '',
-      },
+    // FIX EF-1: Verify JWT belongs to the userId in the request body
+    const meRes = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
+      headers: { 'Authorization': `Bearer ${jwt}`, 'apikey': serviceKey },
     })
-    const userData = await userRes.json()
-    console.log('User fetch status:', userRes.status)
-    const email = userData?.email || ''
+    if (!meRes.ok) throw new Error('Invalid session')
+    const meData = await meRes.json()
+    if (meData.id !== userId) throw new Error('User ID mismatch')
+    const email = meData.email || ''
 
     // Get profile
-    const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=stripe_customer_id,full_name`, {
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'apikey': supabaseKey ?? '',
-      },
-    })
+    const profileRes = await fetchWithTimeout(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=stripe_customer_id,full_name`,
+      { headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey } }
+    )
     const profiles = await profileRes.json()
-    console.log('Profile fetch status:', profileRes.status)
-    const profile = profiles?.[0]
+    const profile  = profiles?.[0]
     let customerId = profile?.stripe_customer_id
 
-    // Create Stripe customer if needed
+    // FIX EF-3 & EF-4: Create customer with conflict-safe PATCH check
     if (!customerId) {
-      console.log('Creating Stripe customer for:', email)
-      const customerRes = await fetch('https://api.stripe.com/v1/customers', {
+      const customerRes = await fetchWithTimeout('https://api.stripe.com/v1/customers', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${stripeKey}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        headers: { 'Authorization': `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           email,
-          name: profile?.full_name || '',
+          name: (profile?.full_name || '').substring(0, 100),
           'metadata[supabase_user_id]': userId,
         }),
       })
       const customer = await customerRes.json()
-      console.log('Stripe customer result:', JSON.stringify(customer))
-      if (customer.error) throw new Error(`Stripe customer error: ${customer.error.message}`)
+      if (customer.error) throw new Error('Payment setup failed')
       customerId = customer.id
 
-      // Save customer ID
-      await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
+      // Verify PATCH succeeded — FIX EF-4
+      const patchRes = await fetchWithTimeout(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey ?? '',
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
+          'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey,
+          'Content-Type': 'application/json', 'Prefer': 'return=representation',
         },
         body: JSON.stringify({ stripe_customer_id: customerId }),
       })
+      if (!patchRes.ok) console.error('Failed to save stripe_customer_id — duplicate customer risk')
     }
 
-    // Create checkout session
-    console.log('Creating checkout session with price:', priceId)
-    const sessionRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    const sessionRes = await fetchWithTimeout('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${stripeKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: { 'Authorization': `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         customer: customerId,
         'payment_method_types[0]': 'card',
@@ -100,18 +142,16 @@ serve(async (req) => {
       }),
     })
     const session = await sessionRes.json()
-    console.log('Checkout session result:', JSON.stringify(session))
-    if (session.error) throw new Error(`Stripe session error: ${session.error.message}`)
+    if (session.error) throw new Error('Payment session creation failed')
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...hdrs, 'Content-Type': 'application/json' },
     })
 
   } catch (err) {
-    console.error('Function error:', err.message)
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    console.error('Checkout error:', err.message)
+    return new Response(JSON.stringify({ error: 'Checkout failed. Please try again.' }), {
+      status: 400, headers: { ...hdrs, 'Content-Type': 'application/json' },
     })
   }
 })
