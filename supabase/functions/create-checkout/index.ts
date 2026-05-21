@@ -4,6 +4,7 @@ const ALLOWED_ORIGINS = new Set([
   'https://digitalrelative.co.uk',
   'https://www.digitalrelative.co.uk',
   'https://legatum-chi.vercel.app',
+  'https://digital-relative.vercel.app',
 ])
 
 // FIX EF-2: Return no CORS headers for unknown origins so preflight fails
@@ -25,7 +26,9 @@ const VALID_PRICE_IDS = new Set([
 
 const VALID_REDIRECT_ORIGINS = [
   'https://digitalrelative.co.uk',
+  'https://www.digitalrelative.co.uk',
   'https://legatum-chi.vercel.app',
+  'https://digital-relative.vercel.app',
 ]
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

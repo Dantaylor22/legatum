@@ -43,9 +43,43 @@ function BenModal({ onClose, onSave }) {
           </div>
           <div>
             <label className="label">Access level</label>
-            <select className="input" value={form.access_level} onChange={e => set('access_level', e.target.value)}>
-              {ACCESS_LEVELS.map(a => <option key={a}>{a}</option>)}
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { id: 'Full access', label: 'Full access', icon: '🔓',
+                  detail: "Can see all vault entries, documents, and the After I'm Gone guide. Passwords are never accessible." },
+                { id: 'Read only', label: 'Read only', icon: '👁️',
+                  detail: "Can see account names and the After I'm Gone guide only. Cannot see usernames, notes, or documents." },
+                { id: 'Specific categories only', label: 'Specific categories', icon: '🗂️',
+                  detail: 'Can only see entries you specifically mark as shared with them. Good for solicitors or accountants.' },
+              ].map(opt => (
+                <label key={opt.id} onClick={() => set('access_level', opt.id)} style={{
+                  display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer',
+                  padding: '12px 14px', borderRadius: 'var(--r)',
+                  border: `1px solid ${form.access_level === opt.id ? 'var(--gold-border)' : 'var(--border)'}`,
+                  background: form.access_level === opt.id ? 'var(--gold-dim)' : 'rgba(255,255,255,0.02)',
+                  transition: 'all 0.15s',
+                }}>
+                  <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{opt.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: form.access_level === opt.id ? 'var(--gold)' : 'var(--text)', marginBottom: 3 }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6 }}>
+                      {opt.detail}
+                    </div>
+                  </div>
+                  <div style={{
+                    width: 16, height: 16, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                    border: `2px solid ${form.access_level === opt.id ? 'var(--gold)' : 'var(--border-md)'}`,
+                    background: form.access_level === opt.id ? 'var(--gold)' : 'transparent',
+                    transition: 'all 0.15s',
+                  }} />
+                </label>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-sub)', lineHeight: 1.6, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--r)', border: '1px solid var(--border)' }}>
+              Passwords are never accessible to beneficiaries regardless of access level.
+            </div>
           </div>
         </div>
         <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--gold-dim)', borderRadius: 'var(--r)', border: '1px solid var(--gold-border)', fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6 }}>

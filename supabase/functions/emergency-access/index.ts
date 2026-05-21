@@ -6,6 +6,7 @@ const ALLOWED_ORIGINS = new Set([
   'https://digitalrelative.co.uk',
   'https://www.digitalrelative.co.uk',
   'https://legatum-chi.vercel.app',
+  'https://digital-relative.vercel.app',
 ])
 
 function corsHeaders(origin: string) {

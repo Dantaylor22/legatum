@@ -122,7 +122,7 @@ function AppInner() {
 
   return (
     <div className="layout">
-      {isLocked && <VaultLocked />}
+      {isLocked && pinReady && <VaultLocked />}
       <Sidebar active={page} onNav={setPage} />
       <main className="main-content fade-in">
         {pages[page] || pages.dashboard}
