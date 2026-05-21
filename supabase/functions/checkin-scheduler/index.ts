@@ -194,7 +194,6 @@ serve(async (req) => {
     console.error('Hold period check failed:', err.message)
   }
 
-  console.log('Scheduler complete:', JSON.stringify(results))
   return new Response(JSON.stringify(results), {
     headers: { 'Content-Type': 'application/json' },
   })

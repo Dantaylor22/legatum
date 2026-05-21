@@ -28,7 +28,7 @@ export default function MfaSetup({ onComplete, onSignOut }) {
       })
       if (data?.codes) setRecoveryCodes(data.codes)
     } catch (err) {
-      console.error('Could not generate recovery codes:', err)
+      console.error('Could not generate recovery codes')
     }
   }
 

@@ -48,8 +48,8 @@ export default function MfaVerify({ onVerified, onSignOut }) {
         body: { action: 'verify_recovery_code', userId: user.id, code: recoveryCode.trim() },
       })
       if (error || data?.error) throw new Error(data?.error || 'Invalid recovery code')
-      toast.success('Recovery code accepted — please set up a new 2FA method')
-      onVerified()
+      // Pass flag to indicate recovery was used — App.jsx will prompt re-enroll
+      onVerified({ usedRecovery: true })
     } catch (err) {
       toast.error(err.message || 'Invalid recovery code')
       setRecoveryCode('')

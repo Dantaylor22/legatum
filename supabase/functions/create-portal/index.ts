@@ -19,6 +19,15 @@ function corsHeaders(origin: string) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 15_000): Promise<Response> {
+  const ctrl  = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }) }
+  finally { clearTimeout(timer) }
+}
+
+
+
 serve(async (req) => {
   const origin = req.headers.get('origin') || ''
   const hdrs   = corsHeaders(origin)
@@ -44,7 +53,7 @@ serve(async (req) => {
 
     // Verify JWT belongs to userId
     const jwt = authHeader.slice(7)
-    const meRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    const meRes = await fetchWithTimeout(`${supabaseUrl}/auth/v1/user`, {
       headers: { 'Authorization': `Bearer ${jwt}`, 'apikey': serviceKey },
     })
     if (!meRes.ok) throw new Error('Invalid session')
@@ -52,7 +61,7 @@ serve(async (req) => {
     if (me.id !== userId) throw new Error('User ID mismatch')
 
     // Get Stripe customer ID
-    const profileRes = await fetch(
+    const profileRes = await fetchWithTimeout(
       `${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=stripe_customer_id`,
       { headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey } }
     )
@@ -67,7 +76,7 @@ serve(async (req) => {
       : 'https://digitalrelative.co.uk'
 
     // Create Stripe Customer Portal session
-    const portalRes = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
+    const portalRes = await fetchWithTimeout('https://api.stripe.com/v1/billing_portal/sessions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({

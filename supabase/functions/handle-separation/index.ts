@@ -20,6 +20,15 @@ function corsHeaders(origin: string) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 15_000): Promise<Response> {
+  const ctrl  = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }) }
+  finally { clearTimeout(timer) }
+}
+
+
+
 serve(async (req) => {
   const origin = req.headers.get('origin') || ''
   const hdrs   = corsHeaders(origin)
@@ -47,7 +56,7 @@ serve(async (req) => {
 
     // Verify JWT belongs to initiatorId
     const jwt = authHeader.slice(7)
-    const meRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+    const meRes = await fetchWithTimeout(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
       headers: { 'Authorization': `Bearer ${jwt}`, 'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! },
     })
     // FIX EF-4/BL-2: verify response OK before parsing
@@ -87,7 +96,7 @@ serve(async (req) => {
 
       if (nonPayerProfile?.stripe_subscription_id && nonPayerProfile?.plan === 'single') {
         // Non-payer had a Single plan before couples — refund unused portion
-        const subRes = await fetch(
+        const subRes = await fetchWithTimeout(
           `https://api.stripe.com/v1/subscriptions/${nonPayerProfile.stripe_subscription_id}`,
           { headers: { 'Authorization': `Bearer ${stripeKey}` } }
         )
@@ -105,7 +114,7 @@ serve(async (req) => {
 
           if (refundPence > 0) {
             // Get latest invoice charge ID for refund
-            const invoicesRes = await fetch(
+            const invoicesRes = await fetchWithTimeout(
               `https://api.stripe.com/v1/invoices?customer=${sub.customer}&limit=1&status=paid`,
               { headers: { 'Authorization': `Bearer ${stripeKey}` } }
             )
@@ -113,7 +122,7 @@ serve(async (req) => {
             const chargeId = invoices.data?.[0]?.charge
 
             if (chargeId) {
-              const refundRes = await fetch('https://api.stripe.com/v1/refunds', {
+              const refundRes = await fetchWithTimeout('https://api.stripe.com/v1/refunds', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({

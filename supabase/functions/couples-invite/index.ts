@@ -106,7 +106,7 @@ serve(async (req) => {
 
       if (partnerExistingLink) {
         // Don't reveal this — return success to prevent enumeration
-        console.log(`Partner ${partnerId} already has a link — silently succeeding`)
+        // Silently succeed — don't reveal partner link status (prevents enumeration)
         return new Response(JSON.stringify({ success: true, partnerExists: true }), {
           headers: { ...hdrs, 'Content-Type': 'application/json' },
         })

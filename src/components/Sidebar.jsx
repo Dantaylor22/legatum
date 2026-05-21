@@ -44,13 +44,19 @@ export default function Sidebar({ active, onNav }) {
   const planId    = profile?.plan || 'free'
   const plan      = PLANS[planId] || PLANS.free
   const isCouples = planId === 'couples'
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  const [isMobile, setIsMobile] = useState(false) // initialise false, set after mount
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    const handle = () => setIsMobile(window.innerWidth <= 768)
+    // Set initial value after mount (avoids SSR/window undefined issues)
+    setIsMobile(window.innerWidth <= 768)
+    let timeout
+    const handle = () => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => setIsMobile(window.innerWidth <= 768), 100) // debounced
+    }
     window.addEventListener('resize', handle)
-    return () => window.removeEventListener('resize', handle)
+    return () => { window.removeEventListener('resize', handle); clearTimeout(timeout) }
   }, [])
 
   const navItems = NAV.filter(n => !n.couplesOnly || isCouples)

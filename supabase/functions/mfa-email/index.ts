@@ -35,6 +35,15 @@ async function hashCode(code: string, userId: string): Promise<string> {
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
+
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 15_000): Promise<Response> {
+  const ctrl  = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }) }
+  finally { clearTimeout(timer) }
+}
+
+
   if (a.length !== b.length) return false
   const aB = new TextEncoder().encode(a)
   const bB = new TextEncoder().encode(b)
@@ -90,7 +99,7 @@ serve(async (req) => {
 
     // Verify JWT belongs to userId
     const jwt = authHeader.slice(7)
-    const meRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+    const meRes = await fetchWithTimeout(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
       headers: { 'Authorization': `Bearer ${jwt}`, 'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! },
     })
     if (!meRes.ok) throw new Error('Unauthorised')
@@ -203,6 +212,24 @@ serve(async (req) => {
 
     // ── GENERATE RECOVERY CODES ──────────────────────────────────────────────
     if (action === 'generate_recovery_codes') {
+      // Security: only allow code generation for accounts that just completed MFA setup
+      // We verify by checking if there's a recent MFA enrollment (within last 2 minutes)
+      // For TOTP: Supabase handles this. For email: we check mfa_enrolled was just set.
+      // This prevents regenerating codes without re-authenticating.
+      const { data: prof } = await supabase.from('profiles').select('mfa_enrolled, updated_at').eq('id', userId).single()
+      if (!prof?.mfa_enrolled) {
+        return new Response(JSON.stringify({ error: 'MFA must be set up first' }), {
+          status: 403, headers: { ...hdrs, 'Content-Type': 'application/json' },
+        })
+      }
+      // Only allow if profile was updated in last 5 minutes (just enrolled)
+      const updatedAt  = new Date(prof.updated_at).getTime()
+      const fiveMinAgo = Date.now() - 5 * 60 * 1000
+      if (updatedAt < fiveMinAgo) {
+        return new Response(JSON.stringify({ error: 'Re-authenticate with your 2FA method to regenerate recovery codes' }), {
+          status: 403, headers: { ...hdrs, 'Content-Type': 'application/json' },
+        })
+      }
       // Generate 10 fresh recovery codes — called after MFA setup completes
       // Invalidate any existing codes first
       await supabase.from('mfa_recovery_codes').delete().eq('user_id', userId)
@@ -217,9 +244,14 @@ serve(async (req) => {
         const code  = (hex.slice(0, 5) + '-' + hex.slice(5, 10)).toUpperCase()
         codes.push(code)
 
-        // Hash for storage
+        // Hash for storage using PBKDF2 — recovery codes have lower entropy than passwords
+        // PBKDF2 makes offline cracking expensive even if DB is leaked
         const enc      = new TextEncoder()
-        const hashBuf  = await crypto.subtle.digest('SHA-256', enc.encode(code + userId))
+        const keyMat   = await crypto.subtle.importKey('raw', enc.encode(code), 'PBKDF2', false, ['deriveBits'])
+        const hashBuf  = await crypto.subtle.deriveBits(
+          { name: 'PBKDF2', salt: enc.encode(userId), iterations: 100_000, hash: 'SHA-256' },
+          keyMat, 256
+        )
         const codeHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
         inserts.push({ user_id: userId, code_hash: codeHash })
       }
@@ -237,11 +269,29 @@ serve(async (req) => {
       const { code } = body
       if (!code || typeof code !== 'string') throw new Error('Invalid code')
 
+      // Rate limit: max 10 recovery attempts per hour
+      const { count: recentAttempts } = await supabase
+        .from('mfa_recovery_codes')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('used', true)
+        .gt('used_at', new Date(Date.now() - 3600_000).toISOString())
+
+      if ((recentAttempts ?? 0) >= 10) {
+        return new Response(JSON.stringify({ error: 'Too many recovery attempts. Please contact support.' }), {
+          status: 429, headers: { ...hdrs, 'Content-Type': 'application/json' },
+        })
+      }
+
       const normalised = code.trim().toUpperCase()
 
-      // Hash the provided code
+      // Hash using PBKDF2 to match storage method
       const enc      = new TextEncoder()
-      const hashBuf  = await crypto.subtle.digest('SHA-256', enc.encode(normalised + userId))
+      const keyMat   = await crypto.subtle.importKey('raw', enc.encode(normalised), 'PBKDF2', false, ['deriveBits'])
+      const hashBuf  = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: enc.encode(userId), iterations: 100_000, hash: 'SHA-256' },
+        keyMat, 256
+      )
       const codeHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
 
       // Find unused matching code

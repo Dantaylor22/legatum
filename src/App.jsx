@@ -43,7 +43,8 @@ function AppInner() {
   const { isLocked }      = useVaultLock()
   const [page, setPage]   = useState('dashboard')
   const [pinReady, setPinReady]     = useState(false)
-  const [mfaVerified, setMfaVerified] = useState(false)
+  const [mfaVerified, setMfaVerified]   = useState(false)
+  const [recoveryUsed, setRecoveryUsed]   = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -118,7 +119,7 @@ function AppInner() {
       return <MfaSetup onComplete={() => setMfaVerified(true)} onSignOut={signOut} />
     }
     // MFA enrolled — verify it this session
-    return <MfaVerify onVerified={() => setMfaVerified(true)} onSignOut={signOut} />
+    return <MfaVerify onVerified={(opts) => { setMfaVerified(true); if (opts?.usedRecovery) setRecoveryUsed(true) }} onSignOut={signOut} />
   }
 
   // Beneficiary-origin users with no own vault see the beneficiary dashboard
@@ -144,6 +145,18 @@ function AppInner() {
       {isLocked && pinReady && <VaultLocked />}
       <Sidebar active={page} onNav={setPage} />
       <main className="main-content fade-in">
+        {recoveryUsed && (
+          <div style={{ background: 'rgba(224,82,82,0.1)', border: '1px solid rgba(224,82,82,0.3)', borderRadius: 'var(--r)', padding: '14px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ fontSize: 20 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--cream)', marginBottom: 3 }}>You signed in with a recovery code</div>
+              <div style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.6 }}>Your 2FA device may be lost or unavailable. Set up a new method to keep your account secure.</div>
+            </div>
+            <button className="btn-primary" onClick={() => setPage('settings')} style={{ flexShrink: 0, fontSize: 13, padding: '8px 16px' }}>
+              Set up 2FA →
+            </button>
+          </div>
+        )}
         {pages[page] || pages.dashboard}
       </main>
     </div>
