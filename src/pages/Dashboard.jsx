@@ -11,9 +11,8 @@ export default function Dashboard({ onNav }) {
   const { entries, loading: vLoading } = useVault()
   const { beneficiaries, loading: bLoading } = useBeneficiaries()
 
-  // For GettingStarted checklist
   const hasExecutor     = beneficiaries?.some(b => b.is_executor) ?? false
-  const hasCheckin      = !!(profile?.last_checkin) // true once user has checked in at least once
+  const hasCheckin      = !!(profile?.last_checkin)
   const [hasAfterIAmGone, setHasAfterIAmGone] = useState(false)
 
   useEffect(() => {
@@ -39,20 +38,26 @@ export default function Dashboard({ onNav }) {
      ) : 'Not set',
      sub: profile?.last_checkin
        ? `Next due: ${new Date(new Date(profile.last_checkin).getTime() + (profile?.checkin_frequency_days || 30) * 86400000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-       : 'Check in to activate the switch'
+       : 'Check in to activate'
    },
     { label: 'Vault health',    value: entries.length > 0 ? 'Good' : 'Empty',  sub: entries.length > 0 ? 'Entries added' : 'Add your first entry' },
   ]
 
   return (
     <div>
-      {/* GettingStarted temporarily disabled for debugging */}
+      <GettingStarted
+        onNav={onNav}
+        vaultEntryCount={entries?.length ?? 0}
+        beneficiaryCount={beneficiaries?.length ?? 0}
+        hasExecutor={hasExecutor}
+        hasCheckin={hasCheckin}
+        hasAfterIAmGone={hasAfterIAmGone}
+      />
       <div className="fade-up page-header">
         <h1 className="page-title">{greeting}, {firstName}</h1>
         <p className="page-sub">Your vault is secure and up to date.</p>
       </div>
 
-      {/* Stats */}
       <div className="fade-up-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 28 }}>
         {stats.map((s, i) => (
           <div key={i} className="card-static" style={{ textAlign: 'center' }}>
@@ -63,7 +68,6 @@ export default function Dashboard({ onNav }) {
         ))}
       </div>
 
-      {/* Recent entries */}
       <div className="fade-up-3" style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <h2 style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--cream)' }}>Recent entries</h2>
@@ -96,7 +100,6 @@ export default function Dashboard({ onNav }) {
         )}
       </div>
 
-      {/* Beneficiaries */}
       <div className="fade-up-4">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <h2 style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--cream)' }}>Beneficiaries</h2>
@@ -124,7 +127,7 @@ export default function Dashboard({ onNav }) {
                   <div style={{ fontWeight: 500 }}>{b.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-sub)' }}>{b.relation} · {b.access_level}</div>
                 </div>
-                <span className={`badge badge-${ b.status === 'access_granted' ? 'gold' : ['email_confirmed','id_verified'].includes(b.status) ? 'green' : ['declined','revoked'].includes(b.status) ? 'danger' : 'muted' }`}>{b.status}</span>
+                <span className={`badge badge-${ b.status === 'access_granted' ? 'gold' : ['email_confirmed','id_verified'].includes(b.status) ? 'green' : ['declined','revoked'].includes(b.status) ? 'danger' : 'muted' }`}>{b.status?.replace(/_/g, ' ')}</span>
               </div>
             ))}
           </div>
