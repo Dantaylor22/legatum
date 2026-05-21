@@ -129,13 +129,13 @@ export default function GettingStarted({ onNav, vaultEntryCount = 0, beneficiary
   // Load dismissed/manual state from profile
   useEffect(() => {
     if (!profile) return
-    if (profile.getting_started_dismissed) {
+    if (profile.getting_started_dismissed === true) {
       setPermanent(true)
       setDismissed(true)
     }
     // Convert array of done item IDs to object
     const doneObj = {}
-    for (const id of (profile.getting_started_done_items || [])) {
+    for (const id of (Array.isArray(profile.getting_started_done_items) ? profile.getting_started_done_items : [])) {
       doneObj[id] = true
     }
     setManualDone(doneObj)
@@ -150,10 +150,10 @@ export default function GettingStarted({ onNav, vaultEntryCount = 0, beneficiary
   function dismissPermanently() {
     setDismissed(true)
     setPermanent(true)
-    supabase.from('profiles')
+    if (user?.id) supabase.from('profiles')
       .update({ getting_started_dismissed: true })
       .eq('id', user.id)
-      .then(() => {})
+      .then(() => {}).catch(() => {})
   }
 
   function markDone(id) {
