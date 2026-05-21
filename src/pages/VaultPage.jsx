@@ -104,14 +104,32 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   function handleCompanySelect(company) {
-    setForm(f => ({
-      ...f,
-      title: company.name,
-      category: company.category,
-      _bereavePhone: company.bereavePhone || '',
-      _bereaveUrl: company.bereaveUrl || '',
-      _bereaveNote: company.bereaveNote || '',
-    }))
+    setForm(f => {
+      // Build bereavement info to append to notes if available
+      let bereaveAppend = ''
+      if (company.bereavePhone || company.bereaveUrl) {
+        bereaveAppend = '\n\nBereavement contact for ' + company.name + ':'
+        if (company.bereaveNote) bereaveAppend += '\n' + company.bereaveNote
+        if (company.bereavePhone) bereaveAppend += '\nPhone: ' + company.bereavePhone
+        if (company.bereaveUrl) bereaveAppend += '\nMore info: ' + company.bereaveUrl
+      }
+
+      // Only append if notes doesn't already contain bereavement info
+      const existingNotes = f.notes || ''
+      const newNotes = bereaveAppend && !existingNotes.includes('Bereavement contact')
+        ? existingNotes + bereaveAppend
+        : existingNotes
+
+      return {
+        ...f,
+        title: company.name,
+        category: company.category,
+        notes: newNotes,
+        _bereavePhone: company.bereavePhone || '',
+        _bereaveUrl: company.bereaveUrl || '',
+        _bereaveNote: company.bereaveNote || '',
+      }
+    })
   }
 
   function toggleReminder(days) {
@@ -137,7 +155,12 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
       }
     }
     setSaving(true)
-    try { await onSave(form); onClose() }
+    try {
+      // Strip display-only fields before saving to DB
+      const { _bereavePhone, _bereaveUrl, _bereaveNote, ...saveForm } = form
+      await onSave(saveForm)
+      onClose()
+    }
     catch (e) { toast.error(e.message) }
     finally { setSaving(false) }
   }
@@ -184,8 +207,8 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
                     </a>
                   )}
                 </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-sub)' }}>
-                  Add the phone number to your notes so your beneficiaries can find it easily.
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--success)', opacity: 0.8 }}>
+                  Saved to your notes so beneficiaries can see it.
                 </div>
               </div>
             )}
