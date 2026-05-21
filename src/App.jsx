@@ -155,18 +155,21 @@ function AppInner() {
   // but can access their own vault pages too if they upgrade
   const isBeneficiaryOnly = profile?.account_origin === 'beneficiary' && (!profile?.plan || profile?.plan === 'free')
 
-  const pages = {
-    dashboard:     <Dashboard onNav={setPage} />,
-    vault:         <VaultPage onNav={setPage} />,
-    beneficiaries: <BeneficiariesPage onNav={setPage} />,
-    checkin:       <CheckInPage />,
-    afteriamgone:  <AfterIAmGonePage />,
-    documents:     <DocumentsPage onNav={setPage} />,
-    couples:       <CouplesPage onNav={setPage} />,
-    family:        <FamilyPage />,
-    sharedlinks:   <SharedLinksPage />,
-    plan:          <PlanPage />,
-    settings:      <SettingsPage />,
+  function renderPage() {
+    switch(page) {
+      case 'dashboard':     return <Dashboard onNav={setPage} />
+      case 'vault':         return <VaultPage onNav={setPage} />
+      case 'beneficiaries': return <BeneficiariesPage onNav={setPage} />
+      case 'checkin':       return <CheckInPage />
+      case 'afteriamgone':  return <AfterIAmGonePage />
+      case 'documents':     return <DocumentsPage onNav={setPage} />
+      case 'couples':       return <CouplesPage onNav={setPage} />
+      case 'family':        return <FamilyPage />
+      case 'sharedlinks':   return <SharedLinksPage />
+      case 'plan':          return <PlanPage />
+      case 'settings':      return <SettingsPage />
+      default:              return <Dashboard onNav={setPage} />
+    }
   }
 
   // If a plan was selected from landing page, trigger checkout after vault is ready
@@ -200,7 +203,7 @@ function AppInner() {
             </button>
           </div>
         )}
-        {pages[page] || pages.dashboard}
+        {renderPage()}
       </main>
     </div>
   )
