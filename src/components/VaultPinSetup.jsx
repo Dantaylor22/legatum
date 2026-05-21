@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 // Triggered on first login for Google/Apple users, or
 // for email users who signed up before PIN was introduced
 export default function VaultPinSetup({ onComplete }) {
-  const { user, profile, updateProfile } = useAuth()
+  const { user, profile, setProfile } = useAuth()
   const [pin, setPin]         = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -55,8 +55,8 @@ export default function VaultPinSetup({ onComplete }) {
         key_verification: testEncrypted,
       }).eq('id', user.id)
 
-      // Update local profile state
-      await updateProfile({ vault_pin_set: true })
+      // Update local profile state directly (vault_pin_set not in updateProfile whitelist by design)
+      setProfile(prev => ({ ...prev, vault_pin_set: true, encryption_salt: salt, key_verification: testEncrypted }))
 
       toast.success('Vault PIN set — your data is now encrypted')
       onComplete()
