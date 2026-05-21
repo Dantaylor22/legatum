@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { deriveKey, setSessionKey } from '../lib/crypto'
+import { deriveKey, setSessionKey, getSessionKey, decrypt } from '../lib/crypto'
 import { formatPin } from '../lib/vaultPin'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
