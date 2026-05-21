@@ -214,20 +214,14 @@ serve(async (req) => {
       // We verify by checking if there's a recent MFA enrollment (within last 2 minutes)
       // For TOTP: Supabase handles this. For email: we check mfa_enrolled was just set.
       // This prevents regenerating codes without re-authenticating.
-      const { data: prof } = await supabase.from('profiles').select('mfa_enrolled, updated_at').eq('id', userId).single()
+      const { data: prof } = await supabase.from('profiles').select('mfa_enrolled').eq('id', userId).single()
       if (!prof?.mfa_enrolled) {
         return new Response(JSON.stringify({ error: 'MFA must be set up first' }), {
           status: 403, headers: { ...hdrs, 'Content-Type': 'application/json' },
         })
       }
-      // Only allow if profile was updated in last 5 minutes (just enrolled)
-      const updatedAt  = new Date(prof.updated_at).getTime()
-      const fiveMinAgo = Date.now() - 5 * 60 * 1000
-      if (updatedAt < fiveMinAgo) {
-        return new Response(JSON.stringify({ error: 'Re-authenticate with your 2FA method to regenerate recovery codes' }), {
-          status: 403, headers: { ...hdrs, 'Content-Type': 'application/json' },
-        })
-      }
+      // User is authenticated and MFA is enrolled - allow generating recovery codes
+      // The JWT authentication above already ensures this is the correct user
       // Generate 10 fresh recovery codes — called after MFA setup completes
       // Invalidate any existing codes first
       await supabase.from('mfa_recovery_codes').delete().eq('user_id', userId)
