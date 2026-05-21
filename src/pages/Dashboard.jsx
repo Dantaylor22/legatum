@@ -46,14 +46,7 @@ export default function Dashboard({ onNav }) {
 
   return (
     <div>
-      <GettingStarted
-        onNav={onNav}
-        vaultEntryCount={entries?.length ?? 0}
-        beneficiaryCount={beneficiaries?.length ?? 0}
-        hasExecutor={hasExecutor}
-        hasCheckin={hasCheckin}
-        hasAfterIAmGone={hasAfterIAmGone}
-      />
+      {/* GettingStarted temporarily disabled for debugging */}
       <div className="fade-up page-header">
         <h1 className="page-title">{greeting}, {firstName}</h1>
         <p className="page-sub">Your vault is secure and up to date.</p>
