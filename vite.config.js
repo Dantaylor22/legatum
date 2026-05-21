@@ -6,6 +6,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     sourcemap: false,          // Never expose source maps in production
     minify: 'terser',          // Stronger minification obfuscates logic
+    terserOptions: mode === 'production' ? {
+      compress: {
+        drop_console: true,    // Strip console.log in production
+        drop_debugger: true,
+      },
+    } : {},
     rollupOptions: {
       output: {
         // Randomise chunk names so attackers can't map bundle structure
@@ -15,6 +21,4 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  // Strip console.log in production
-  esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
 }))

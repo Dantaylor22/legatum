@@ -3,15 +3,15 @@
 
 export const UK_COMPANIES = [
   // ── Banking ────────────────────────────────────────────────────────────────
-  { id: 'barclays',       name: 'Barclays',              category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings', 'mortgage'] },
-  { id: 'lloyds',         name: 'Lloyds Bank',           category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'] },
-  { id: 'natwest',        name: 'NatWest',               category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'] },
-  { id: 'hsbc',           name: 'HSBC',                  category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'] },
-  { id: 'santander',      name: 'Santander',             category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings', 'mortgage'] },
-  { id: 'nationwide',     name: 'Nationwide',            category: 'banking',      logo: '🏦', tags: ['bank', 'building society', 'savings', 'mortgage'] },
-  { id: 'halifax',        name: 'Halifax',               category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'mortgage'] },
-  { id: 'monzo',          name: 'Monzo',                 category: 'banking',      logo: '🏦', tags: ['bank', 'digital bank', 'current account'] },
-  { id: 'starling',       name: 'Starling Bank',         category: 'banking',      logo: '🏦', tags: ['bank', 'digital bank', 'current account'] },
+  { id: 'barclays',       name: 'Barclays',              category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings', 'mortgage'], bereavePhone: '0800 068 2313', bereaveUrl: 'https://www.barclays.co.uk/help/bereavement/', bereaveNote: 'Dedicated bereavement team. Call to register and close accounts.' },
+  { id: 'lloyds',         name: 'Lloyds Bank',           category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'], bereavePhone: '0800 096 4396', bereaveUrl: 'https://www.lloydsbank.com/help-guidance/bereavement.html', bereaveNote: 'Bereavement support team. Can close accounts and release funds for funeral costs.' },
+  { id: 'natwest',        name: 'NatWest',               category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'], bereavePhone: '0800 161 5584', bereaveUrl: 'https://www.natwest.com/support/bereavement.html', bereaveNote: 'NatWest bereavement team. Can also be notified via the Death Notification Service.' },
+  { id: 'hsbc',           name: 'HSBC',                  category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'], bereavePhone: '0800 783 1300', bereaveUrl: 'https://www.hsbc.co.uk/help/bereavement-support/', bereaveNote: 'HSBC bereavement and executor helpline.' },
+  { id: 'santander',      name: 'Santander',             category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings', 'mortgage'], bereavePhone: '0800 085 0422', bereaveUrl: 'https://www.santander.co.uk/personal/support/bereavement', bereaveNote: 'Santander bereavement centre. Handles accounts, savings, and mortgages.' },
+  { id: 'nationwide',     name: 'Nationwide',            category: 'banking',      logo: '🏦', tags: ['bank', 'building society', 'savings', 'mortgage'], bereavePhone: '0800 464 3018', bereaveUrl: 'https://www.nationwide.co.uk/support/bereavement/', bereaveNote: 'Nationwide bereavement team. Can handle accounts, savings, and ISAs.' },
+  { id: 'halifax',        name: 'Halifax',               category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'mortgage'], bereavePhone: '0345 850 5505', bereaveUrl: 'https://www.halifax.co.uk/helpcentre/bereavement/', bereaveNote: 'Halifax bereavement team. Part of Lloyds Banking Group.' },
+  { id: 'monzo',          name: 'Monzo',                 category: 'banking',      logo: '🏦', tags: ['bank', 'digital bank', 'current account'], bereaveUrl: 'https://monzo.com/information/bereavement/', bereaveNote: 'Contact Monzo via the app or email bereavement@monzo.com. No dedicated phone line.' },
+  { id: 'starling',       name: 'Starling Bank',         category: 'banking',      logo: '🏦', tags: ['bank', 'digital bank', 'current account'], bereaveUrl: 'https://www.starlingbank.com/help/managing-your-money/bereavement/', bereaveNote: 'Contact via in-app chat or email help@starlingbank.com for bereavement support.' },
   { id: 'revolut',        name: 'Revolut',               category: 'banking',      logo: '🏦', tags: ['bank', 'digital bank', 'current account'] },
   { id: 'virgin-money',   name: 'Virgin Money',          category: 'banking',      logo: '🏦', tags: ['bank', 'current account', 'savings'] },
   { id: 'tesco-bank',     name: 'Tesco Bank',            category: 'banking',      logo: '🏦', tags: ['bank', 'savings', 'credit card'] },
@@ -30,14 +30,14 @@ export const UK_COMPANIES = [
   { id: 'interactive',    name: 'Interactive Investor',  category: 'investments',  logo: '📈', tags: ['isa', 'sipp', 'stocks', 'investments'] },
   { id: 'trading-212',    name: 'Trading 212',           category: 'investments',  logo: '📈', tags: ['stocks', 'isa', 'investments'] },
   { id: 'nutmeg',         name: 'Nutmeg',                category: 'investments',  logo: '📈', tags: ['isa', 'pension', 'investments'] },
-  { id: 'nest',           name: 'NEST Pension',          category: 'investments',  logo: '📈', tags: ['pension', 'workplace pension'] },
+  { id: 'nest',           name: 'NEST Pension',          category: 'investments',  logo: '📈', tags: ['pension', 'workplace pension'], bereavePhone: '0300 020 0090', bereaveUrl: 'https://www.nestpensions.org.uk/schemeweb/nest/about-our-scheme/bereavement.html', bereaveNote: 'NEST bereavement team. Will process death benefit nominations and release funds.' },
   { id: 'peoples-pension',name: 'The People\'s Pension', category: 'investments',  logo: '📈', tags: ['pension', 'workplace pension'] },
-  { id: 'aviva-pension',  name: 'Aviva Pension',         category: 'investments',  logo: '📈', tags: ['pension', 'annuity'] },
-  { id: 'legal-general',  name: 'Legal & General',       category: 'investments',  logo: '📈', tags: ['pension', 'isa', 'investments'] },
+  { id: 'aviva-pension',  name: 'Aviva Pension',         category: 'investments',  logo: '📈', tags: ['pension', 'annuity'], bereavePhone: '0800 068 5478', bereaveUrl: 'https://www.aviva.co.uk/bereavement/', bereaveNote: 'Aviva bereavement helpline. Handles pensions, annuities, and life insurance.' },
+  { id: 'legal-general',  name: 'Legal & General',       category: 'investments',  logo: '📈', tags: ['pension', 'isa', 'investments'], bereavePhone: '0370 010 4080', bereaveUrl: 'https://www.legalandgeneral.com/existing-customers/bereavement/', bereaveNote: 'Legal & General bereavement helpline for pensions, ISAs, and life insurance.' },
   { id: 'standard-life',  name: 'Standard Life',         category: 'investments',  logo: '📈', tags: ['pension', 'investments'] },
 
   // ── Insurance ──────────────────────────────────────────────────────────────
-  { id: 'aviva',          name: 'Aviva',                 category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'life', 'travel', 'insurance'], expiryRelevant: true },
+  { id: 'aviva',          name: 'Aviva',                 category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'life', 'travel', 'insurance'], expiryRelevant: true, bereavePhone: '0800 068 5478', bereaveUrl: 'https://www.aviva.co.uk/bereavement/', bereaveNote: 'Aviva bereavement helpline for life insurance, protection, and pension claims.' },
   { id: 'direct-line',    name: 'Direct Line',           category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'insurance'], expiryRelevant: true },
   { id: 'admiral',        name: 'Admiral',               category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'insurance'], expiryRelevant: true },
   { id: 'axa',            name: 'AXA',                   category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'health', 'life', 'insurance'], expiryRelevant: true },
@@ -49,7 +49,7 @@ export const UK_COMPANIES = [
   { id: 'vitality',       name: 'Vitality',              category: 'insurance',    logo: '🛡️', tags: ['health', 'life', 'insurance'], expiryRelevant: true },
   { id: 'sunlife',        name: 'SunLife',               category: 'insurance',    logo: '🛡️', tags: ['life', 'over 50s', 'insurance'] },
   { id: 'zurich',         name: 'Zurich',                category: 'insurance',    logo: '🛡️', tags: ['life', 'insurance', 'protection'] },
-  { id: 'royal-london',   name: 'Royal London',          category: 'insurance',    logo: '🛡️', tags: ['life', 'income protection', 'insurance'] },
+  { id: 'royal-london',   name: 'Royal London',          category: 'insurance',    logo: '🛡️', tags: ['life', 'income protection', 'insurance'], bereavePhone: '0345 605 0098', bereaveUrl: 'https://www.royallondon.com/bereavement/', bereaveNote: 'Royal London bereavement and claims team for life cover and protection policies.' },
   { id: 'ageas',          name: 'Ageas',                 category: 'insurance',    logo: '🛡️', tags: ['car', 'home', 'insurance'], expiryRelevant: true },
 
   // ── Energy / Utilities ─────────────────────────────────────────────────────

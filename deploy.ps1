@@ -10,96 +10,93 @@ Write-Host "  Digital Relative Deploy Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Check we're in the right directory
+# Check we're in the right directory
 if (-not (Test-Path "package.json")) {
     Write-Host "ERROR: Run this script from the legatum folder" -ForegroundColor Red
     exit 1
 }
 
-# 2. npm audit
-Write-Host "Step 1/6: Running npm audit..." -ForegroundColor Yellow
-$auditResult = npm audit 2>&1
+# Step 1: npm audit
+Write-Host "Step 1/5: Security audit..." -ForegroundColor Yellow
+npm audit --silent
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "FAILED: npm audit found vulnerabilities:" -ForegroundColor Red
-    Write-Host $auditResult
-    Write-Host "Fix vulnerabilities before deploying." -ForegroundColor Red
+    Write-Host "  FAILED: Vulnerabilities found. Fix before deploying." -ForegroundColor Red
     exit 1
 }
-Write-Host "  npm audit: clean" -ForegroundColor Green
+Write-Host "  Clean - no vulnerabilities" -ForegroundColor Green
 
-# 3. Build
-Write-Host "Step 2/6: Building..." -ForegroundColor Yellow
-npm run build 2>&1 | Out-Null
+# Step 2: Install dependencies
+Write-Host "Step 2/5: Installing dependencies..." -ForegroundColor Yellow
+npm install --silent
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "FAILED: Build errors found. Run 'npm run build' to see details." -ForegroundColor Red
+    Write-Host "  FAILED: npm install failed" -ForegroundColor Red
     exit 1
 }
-Write-Host "  Build: passed" -ForegroundColor Green
+Write-Host "  Done" -ForegroundColor Green
 
-# 4. Git status
-Write-Host "Step 3/6: Checking git status..." -ForegroundColor Yellow
+# Step 3: Build
+Write-Host "Step 3/5: Building..." -ForegroundColor Yellow
+$proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run build > `"$env:TEMP\dr_build_out.txt`" 2>&1" -Wait -PassThru -NoNewWindow
+if ($proc.ExitCode -ne 0) {
+    Write-Host "  FAILED: Build errors:" -ForegroundColor Red
+    Get-Content "$env:TEMP\dr_build_out.txt" | Select-String -NotMatch "^$" | Write-Host
+    exit 1
+}
+Write-Host "  Build passed" -ForegroundColor Green
+
+# Step 4: Commit and push
+Write-Host "Step 4/5: Committing..." -ForegroundColor Yellow
 $changes = git status --porcelain
 if (-not $changes) {
     Write-Host "  No changes to deploy" -ForegroundColor Yellow
     exit 0
 }
-Write-Host "  Changes detected" -ForegroundColor Green
 
-# 5. Commit message
 Write-Host ""
-$msg = Read-Host "Step 4/6: Enter commit message"
-if (-not $msg) {
-    $msg = "Deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-}
+$msg = Read-Host "  Enter commit message"
+if (-not $msg) { $msg = "Deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
 
-# 6. Git add, commit, push
-Write-Host "Step 5/6: Committing and pushing..." -ForegroundColor Yellow
-git add .
-git commit -m $msg
-git push
+git add . 2>$null
+git commit -m $msg --quiet 2>$null
+git push --quiet
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "FAILED: Git push failed" -ForegroundColor Red
+    Write-Host "  FAILED: Git push failed" -ForegroundColor Red
     exit 1
 }
-Write-Host "  Pushed to GitHub - Vercel will auto-deploy frontend" -ForegroundColor Green
+Write-Host "  Pushed - Vercel will auto-deploy frontend" -ForegroundColor Green
 
-# 7. Check which edge functions changed and deploy them
-Write-Host "Step 6/6: Checking for edge function changes..." -ForegroundColor Yellow
+# Step 5: Deploy changed edge functions
+Write-Host "Step 5/5: Edge functions..." -ForegroundColor Yellow
+$changedFunctions = git diff HEAD~1 --name-only 2>$null | Where-Object { $_ -match "supabase/functions/([^/]+)/index\.ts" -and $_ -notmatch "_shared" }
 
-$changedFunctions = git diff HEAD~1 --name-only 2>/dev/null | Where-Object { $_ -match "supabase/functions/(.+)/index.ts" }
-
-if ($changedFunctions) {
-    Write-Host ""
-    Write-Host "Edge functions changed - deploying:" -ForegroundColor Yellow
-    
+if (-not $changedFunctions) {
+    Write-Host "  No edge function changes" -ForegroundColor Green
+} else {
     $deployed = @()
     foreach ($file in $changedFunctions) {
-        if ($file -match "supabase/functions/([^/]+)/index.ts") {
-            $funcName = $matches[1]
-            if ($funcName -ne "_shared" -and $funcName -notin $deployed) {
-                $deployed += $funcName
-                Write-Host "  Deploying $funcName..." -ForegroundColor Yellow
-                if ($funcName -eq "stripe-webhook") {
-                    supabase functions deploy stripe-webhook --no-verify-jwt
+        if ($file -match "supabase/functions/([^/]+)/index\.ts") {
+            $fn = $matches[1]
+            if ($fn -notin $deployed) {
+                $deployed += $fn
+                Write-Host "  Deploying $fn..." -ForegroundColor Yellow
+                if ($fn -eq "stripe-webhook") {
+                    supabase functions deploy stripe-webhook --no-verify-jwt 2>&1 | Out-Null
                 } else {
-                    supabase functions deploy $funcName
+                    supabase functions deploy $fn 2>&1 | Out-Null
                 }
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Host "  $funcName deployed" -ForegroundColor Green
+                    Write-Host "  $fn deployed" -ForegroundColor Green
                 } else {
-                    Write-Host "  WARNING: $funcName deploy failed - run manually" -ForegroundColor Red
+                    Write-Host "  WARNING: $fn failed - deploy manually" -ForegroundColor Red
                 }
             }
         }
     }
-} else {
-    Write-Host "  No edge function changes" -ForegroundColor Green
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Deploy complete!" -ForegroundColor Green
-Write-Host "  Frontend: https://digitalrelative.co.uk" -ForegroundColor Cyan
-Write-Host "  Vercel:   https://digital-relative.vercel.app" -ForegroundColor Cyan
+Write-Host "  All done!" -ForegroundColor Green
+Write-Host "  Site: https://digitalrelative.co.uk" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""

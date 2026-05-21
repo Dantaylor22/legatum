@@ -13,6 +13,7 @@ import MfaVerify from './components/MfaVerify'
 import VaultPinEntry from './components/VaultPinEntry'
 import ErrorBoundary from './components/ErrorBoundary'
 import AuthPage from './pages/AuthPage'
+import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
 import VaultPage from './pages/VaultPage'
 import BeneficiariesPage from './pages/BeneficiariesPage'
@@ -42,6 +43,7 @@ function AppInner() {
   const { user, profile, loading, transitioning, signOut } = useAuth()
   const { isLocked }      = useVaultLock()
   const [page, setPage]   = useState('dashboard')
+  const [showAuth, setShowAuth]   = useState(false) // true when user clicks login/signup from landing
   const [pinReady, setPinReady]     = useState(false)
   const [mfaVerified, setMfaVerified]   = useState(false)
   const [recoveryUsed, setRecoveryUsed]   = useState(false)
@@ -97,7 +99,17 @@ function AppInner() {
     )
   }
 
-  if (!user) return <AuthPage />
+  if (!user) {
+    if (showAuth) return <AuthPage />
+    // Show landing page to unauthenticated visitors
+    // Check if they came via a direct auth link (signup=true param)
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('signup') || params.get('login')) return <AuthPage />
+    return <LandingPage
+      onLogin={() => setShowAuth(true)}
+      onSignup={() => setShowAuth(true)}
+    />
+  }
 
   // Profile loaded but PIN not yet set — first time setup
   if (profile && !pinIsSet(profile)) {

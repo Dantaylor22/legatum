@@ -108,6 +108,9 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
       ...f,
       title: company.name,
       category: company.category,
+      _bereavePhone: company.bereavePhone || '',
+      _bereaveUrl: company.bereaveUrl || '',
+      _bereaveNote: company.bereaveNote || '',
     }))
   }
 
@@ -124,6 +127,15 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
   async function handleSave() {
     const titleErr = validateVaultTitle(form.title)
     if (titleErr) { toast.error(titleErr); return }
+
+    // Validate expiry date if provided - must be a valid date
+    if (form.expiry_date) {
+      const parsed = new Date(form.expiry_date)
+      if (isNaN(parsed.getTime())) {
+        toast.error('Please enter a valid expiry date or leave it blank')
+        return
+      }
+    }
     setSaving(true)
     try { await onSave(form); onClose() }
     catch (e) { toast.error(e.message) }
@@ -148,6 +160,35 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
               onChange={v => set('title', v)}
               onSelect={handleCompanySelect}
             />
+            {/* Bereavement contact info shown after company selection */}
+            {(form._bereavePhone || form._bereaveUrl) && (
+              <div style={{
+                marginTop: 8, padding: '12px 14px',
+                background: 'rgba(76,175,130,0.08)', border: '1px solid rgba(76,175,130,0.2)',
+                borderRadius: 'var(--r)', fontSize: 12, lineHeight: 1.7,
+              }}>
+                <div style={{ fontWeight: 600, color: 'var(--success)', marginBottom: 4 }}>
+                  Bereavement contact for {form.title}
+                </div>
+                {form._bereaveNote && <div style={{ color: 'var(--cream-dim)', marginBottom: 6 }}>{form._bereaveNote}</div>}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {form._bereavePhone && (
+                    <span style={{ color: 'var(--text-sub)' }}>
+                      📞 <strong style={{ color: 'var(--text)' }}>{form._bereavePhone}</strong>
+                    </span>
+                  )}
+                  {form._bereaveUrl && (
+                    <a href={form._bereaveUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ color: 'var(--gold)', textDecoration: 'none' }}>
+                      🔗 Bereavement page
+                    </a>
+                  )}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-sub)' }}>
+                  Add the phone number to your notes so your beneficiaries can find it easily.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Category */}
@@ -194,9 +235,21 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
             <div style={{ fontSize: 11, color: 'var(--text-sub)', marginBottom: 6 }}>
               Useful for insurance policies, passports, driving licences, contracts
             </div>
-            <input className="input" type="date" value={form.expiry_date || ''}
-              onChange={e => set('expiry_date', e.target.value)}
-              min={new Date().toISOString().split('T')[0]} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" type="date" value={form.expiry_date || ''}
+                onChange={e => set('expiry_date', e.target.value)}
+                style={{ flex: 1 }} />
+              {form.expiry_date && (
+                <button type="button" onClick={() => set('expiry_date', '')} style={{
+                  background: 'transparent', border: '1px solid var(--border-md)',
+                  borderRadius: 'var(--r)', color: 'var(--text-sub)', padding: '0 12px',
+                  cursor: 'pointer', fontSize: 12, fontFamily: 'var(--sans)',
+                }}>Clear</button>
+              )}
+            </div>
+            {form.expiry_date && isNaN(new Date(form.expiry_date).getTime()) && (
+              <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>Please enter a valid date</div>
+            )}
           </div>
 
           {/* Reminder days */}
@@ -301,7 +354,7 @@ export default function VaultPage({ onNav }) {
                 ⚠️ {expiring.length} {expiring.length === 1 ? 'entry needs' : 'entries need'} attention
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-sub)' }}>
-                {expiring.map(e => e.title).join(', ')} — expired or expiring soon
+                {expiring.map(e => e.title).join(', ')} - expired or expiring soon
               </div>
             </div>
             <button className="btn-ghost" style={{ fontSize: 12, borderColor: 'rgba(224,82,82,0.3)', color: 'var(--danger)' }}>
@@ -372,7 +425,7 @@ export default function VaultPage({ onNav }) {
                       {e.expiry_date && days !== null && days <= 30 && (
                         <div style={{ marginBottom: 12, padding: '10px 12px', background: days < 0 ? 'var(--danger-dim)' : 'rgba(232,164,76,0.1)', borderRadius: 'var(--r)', border: `1px solid ${days < 0 ? 'rgba(224,82,82,0.3)' : 'rgba(232,164,76,0.3)'}` }}>
                           <div style={{ fontSize: 13, fontWeight: 500, color: days < 0 ? 'var(--danger)' : '#e8a44c' }}>
-                            {days < 0 ? `⚠️ Expired ${Math.abs(days)} days ago — please update` : `⏰ Expires in ${days} days — consider renewing`}
+                            {days < 0 ? `⚠️ Expired ${Math.abs(days)} days ago - please update` : `⏰ Expires in ${days} days - consider renewing`}
                           </div>
                         </div>
                       )}
