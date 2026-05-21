@@ -1,10 +1,15 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno&pin=v135'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno&pin=v135'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno'
 
-const stripe   = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2024-06-20' })
-const secret   = Deno.env.get('STRIPE_WEBHOOK_SECRET')!
-const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+// Stripe webhook handler — no Stripe npm package (incompatible with Deno edge runtime)
+// Signature verification done manually using Web Crypto API
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const PRICE_TO_PLAN: Record<string, string> = {
   [Deno.env.get('STRIPE_PRICE_SINGLE_ANNUAL')   || '']: 'single',
@@ -12,22 +17,73 @@ const PRICE_TO_PLAN: Record<string, string> = {
   [Deno.env.get('STRIPE_PRICE_COUPLES_ANNUAL')  || '']: 'couples',
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Verify Stripe webhook signature using Web Crypto API
+async function verifyStripeSignature(
+  body: string,
+  signature: string,
+  secret: string
+): Promise<boolean> {
+  try {
+    // Parse the signature header: t=timestamp,v1=hash
+    const parts: Record<string, string> = {}
+    for (const part of signature.split(',')) {
+      const [k, v] = part.split('=')
+      parts[k] = v
+    }
+    const timestamp = parts['t']
+    const v1        = parts['v1']
+    if (!timestamp || !v1) return false
+
+    // Check timestamp is within 5 minutes (prevent replay attacks)
+    const now = Math.floor(Date.now() / 1000)
+    if (Math.abs(now - parseInt(timestamp)) > 300) {
+      console.error('Stripe webhook timestamp too old:', timestamp)
+      return false
+    }
+
+    // Compute expected signature: HMAC-SHA256(timestamp + '.' + body)
+    const enc       = new TextEncoder()
+    const keyData   = enc.encode(secret)
+    const msgData   = enc.encode(`${timestamp}.${body}`)
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    )
+    const sigBuf    = await crypto.subtle.sign('HMAC', cryptoKey, msgData)
+    const sigHex    = Array.from(new Uint8Array(sigBuf))
+      .map(b => b.toString(16).padStart(2, '0')).join('')
+
+    // Constant-time comparison
+    if (sigHex.length !== v1.length) return false
+    const aBytes = enc.encode(sigHex)
+    const bBytes = enc.encode(v1)
+    let diff = 0
+    for (let i = 0; i < aBytes.length; i++) diff |= aBytes[i] ^ bBytes[i]
+    return diff === 0
+  } catch (err) {
+    console.error('Signature verification error:', err.message)
+    return false
+  }
+}
 
 serve(async (req) => {
   const body      = await req.text()
   const signature = req.headers.get('stripe-signature') ?? ''
+  const secret    = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? ''
 
-  // Verify signature FIRST — reject anything that isn't from Stripe
-  let event: Stripe.Event
-  try {
-    console.log('Webhook secret present:', !!secret, 'length:', secret?.length)
-    console.log('Signature present:', !!signature)
-    console.log('Body length:', body?.length)
-    event = stripe.webhooks.constructEvent(body, signature, secret)
-  } catch (err) {
-    console.error('Signature verification failed:', err.message)
+  console.log('Webhook received, secret present:', !!secret, 'sig present:', !!signature)
+
+  // Verify Stripe signature
+  const valid = await verifyStripeSignature(body, signature, secret)
+  if (!valid) {
+    console.error('Stripe signature verification failed')
     return new Response('Forbidden', { status: 403 })
+  }
+
+  let event: any
+  try {
+    event = JSON.parse(body)
+  } catch {
+    return new Response('Bad request', { status: 400 })
   }
 
   // Idempotency — skip already-processed events
@@ -37,7 +93,6 @@ serve(async (req) => {
       .select('id')
       .eq('id', event.id)
       .maybeSingle()
-    // FIX TP-2: existing IS the row (maybeSingle returns data:row|null), not data:{data:row}
     if (existing) return new Response('OK', { status: 200 })
   } catch { /* not found = proceed */ }
 
@@ -47,7 +102,6 @@ serve(async (req) => {
       id: event.id, type: event.type, payload: event.data,
     })
   } catch (err) {
-    // Log internally, never expose to Stripe
     console.error('Webhook handler error:', err.message)
     return new Response('Internal error', { status: 500 })
   }
@@ -55,52 +109,52 @@ serve(async (req) => {
   return new Response('OK', { status: 200 })
 })
 
-async function handleEvent(event: Stripe.Event) {
+async function handleEvent(event: any) {
   switch (event.type) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
-      const sub    = event.data.object as Stripe.Subscription
-      const userId = sub.metadata?.supabase_user_id ?? ''
+      const sub    = event.data?.object
+      const userId = sub?.metadata?.supabase_user_id ?? ''
 
-      // Validate userId is a real UUID before touching DB
       if (!UUID_RE.test(userId)) {
         console.error('Invalid userId in subscription metadata:', userId)
         return
       }
 
-      const priceId = sub.items.data[0]?.price.id ?? ''
+      // Handle both old and new Stripe API formats for price ID
+      const priceId = sub?.items?.data?.[0]?.price?.id
+                   ?? sub?.plan?.id
+                   ?? ''
       const plan    = PRICE_TO_PLAN[priceId]
 
-      // Only allow known plans — never set to unknown value
       if (!plan) {
-        console.error('Unknown price ID in subscription:', priceId)
+        console.error('Unknown price ID:', priceId, 'known:', Object.keys(PRICE_TO_PLAN))
         return
       }
 
-      const renewal = new Date(sub.current_period_end * 1000).toISOString()
+      const renewal = new Date((sub?.current_period_end ?? 0) * 1000).toISOString()
 
-      // Verify user exists before updating
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
+        .from('profiles').select('id').eq('id', userId).single()
       if (!profile) {
-        console.error('User not found for subscription update:', userId)
+        console.error('User not found:', userId)
         return
       }
 
-      await supabase.from('profiles').update({
+      const { error } = await supabase.from('profiles').update({
         plan,
         plan_renewal:           renewal,
-        stripe_subscription_id: sub.id,
+        stripe_subscription_id: sub?.id,
       }).eq('id', userId)
+
+      if (error) console.error('Profile update failed:', error.message)
+      else console.log('Plan updated to', plan, 'for user', userId)
       break
     }
 
     case 'customer.subscription.deleted': {
-      const sub    = event.data.object as Stripe.Subscription
-      const userId = sub.metadata?.supabase_user_id ?? ''
+      const sub    = event.data?.object
+      const userId = sub?.metadata?.supabase_user_id ?? ''
       if (!UUID_RE.test(userId)) return
 
       await supabase.from('profiles').update({
@@ -108,13 +162,13 @@ async function handleEvent(event: Stripe.Event) {
         plan_renewal:           null,
         stripe_subscription_id: null,
       }).eq('id', userId)
+      console.log('Plan reset to free for user', userId)
       break
     }
 
     case 'invoice.payment_failed': {
-      // Log payment failures for monitoring — don't change plan yet
-      const invoice = event.data.object as Stripe.Invoice
-      console.error('Payment failed for customer:', invoice.customer)
+      const invoice = event.data?.object
+      console.error('Payment failed for customer:', invoice?.customer)
       break
     }
   }
