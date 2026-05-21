@@ -9,7 +9,7 @@ const PLAN_FEATURES = {
     { text: '5 vault entries', ok: true },
     { text: '1 beneficiary', ok: true },
     { text: 'All categories', ok: true },
-    { text: 'Dead man\'s switch', ok: false },
+    { text: 'Check-in protection', ok: false },
     { text: 'File uploads', ok: false },
     { text: 'Email support', ok: false },
   ],
@@ -17,7 +17,7 @@ const PLAN_FEATURES = {
     { text: 'Unlimited entries', ok: true },
     { text: 'Up to 3 beneficiaries', ok: true },
     { text: 'All categories', ok: true },
-    { text: 'Dead man\'s switch', ok: true },
+    { text: 'Check-in protection', ok: true },
     { text: 'File uploads (1 GB)', ok: true },
     { text: 'Email support', ok: true },
   ],
@@ -25,7 +25,7 @@ const PLAN_FEATURES = {
     { text: '2 vaults included', ok: true },
     { text: 'Up to 5 beneficiaries', ok: true },
     { text: 'All categories', ok: true },
-    { text: 'Dead man\'s switch × 2', ok: true },
+    { text: 'Check-in protection × 2', ok: true },
     { text: 'File uploads (5 GB)', ok: true },
     { text: 'Priority support', ok: true },
   ],
@@ -33,6 +33,16 @@ const PLAN_FEATURES = {
 
 export default function PlanPage() {
   const { user, profile } = useAuth()
+
+  // Listen for checkout trigger from landing page plan selection
+  useEffect(() => {
+    function handleTrigger(e) {
+      const { priceId, planId } = e.detail || {}
+      if (priceId && planId) checkout(priceId, planId)
+    }
+    window.addEventListener('dr_trigger_checkout', handleTrigger)
+    return () => window.removeEventListener('dr_trigger_checkout', handleTrigger)
+  }, [])
   const [loading, setLoading]           = useState('') // plan key being loaded
   const [showDowngradeModal, setShowDowngradeModal] = useState(false)
   const [couplesAnnual, setCouplesAnnual] = useState(false)
@@ -191,7 +201,7 @@ export default function PlanPage() {
                 "Vault entries above 5 will become inaccessible (not deleted)",
                 "All uploaded documents will become inaccessible",
                 "Beneficiaries above 1 will lose access invitations",
-                "Dead man's switch will be disabled",
+                "Check-in protection will be disabled",
                 "Email reminders for check-ins will stop",
                 "Expiry reminders will stop",
               ].map((item, i) => (

@@ -40,10 +40,11 @@ const isEmergencyRoute = window.location.pathname === '/emergency-access'
 const isAdminRoute = window.location.pathname === '/admin/review'
 
 function AppInner() {
-  const { user, profile, loading, transitioning, signOut } = useAuth()
+  const { user, profile, loading, transitioning, signOut, fetchProfile } = useAuth()
   const { isLocked }      = useVaultLock()
   const [page, setPage]   = useState('dashboard')
-  const [showAuth, setShowAuth]   = useState(false) // true when user clicks login/signup from landing
+  const [showAuth, setShowAuth]     = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState(null) // plan chosen from landing page pricing
   const [pinReady, setPinReady]     = useState(false)
   const [mfaVerified, setMfaVerified]   = useState(false)
   const [recoveryUsed, setRecoveryUsed]   = useState(false)
@@ -55,6 +56,11 @@ function AppInner() {
       toast.success('Payment successful — welcome to your new plan!')
       setPage('plan')
       window.history.replaceState({}, '', '/')
+      // Re-fetch profile after a short delay to pick up plan change from webhook
+      if (fetchProfile && user) {
+        setTimeout(() => fetchProfile(user.id), 2000)
+        setTimeout(() => fetchProfile(user.id), 5000) // second attempt in case webhook is slow
+      }
     }
     if (params.get('cancelled')) {
       toast('Payment cancelled — you have not been charged')
@@ -82,6 +88,15 @@ function AppInner() {
   useEffect(() => {
     if (user && profile && pinIsSet(profile) && hasSessionKey()) {
       setPinReady(true)
+      // Check for pending plan from landing page signup flow
+      const pendingPlan = sessionStorage.getItem('dr_pending_plan')
+      if (pendingPlan) {
+        try {
+          const plan = JSON.parse(pendingPlan)
+          sessionStorage.removeItem('dr_pending_plan')
+          setSelectedPlan(plan)
+        } catch {}
+      }
     } else {
       setPinReady(false)
       setMfaVerified(false)
@@ -100,14 +115,15 @@ function AppInner() {
   }
 
   if (!user) {
-    if (showAuth) return <AuthPage />
+    if (showAuth) return <AuthPage onBack={() => setShowAuth(false)} selectedPlan={selectedPlan} onClearPlan={() => setSelectedPlan(null)} />
     // Show landing page to unauthenticated visitors
     // Check if they came via a direct auth link (signup=true param)
     const params = new URLSearchParams(window.location.search)
     if (params.get('signup') || params.get('login')) return <AuthPage />
     return <LandingPage
-      onLogin={() => setShowAuth(true)}
-      onSignup={() => setShowAuth(true)}
+      onLogin={() => { setSelectedPlan(null); setShowAuth(true) }}
+      onSignup={() => { setSelectedPlan(null); setShowAuth(true) }}
+      onPlan={(planId, priceId) => { setSelectedPlan({ planId, priceId }); setShowAuth(true) }}
     />
   }
 
@@ -151,6 +167,20 @@ function AppInner() {
     plan:          <PlanPage />,
     settings:      <SettingsPage />,
   }
+
+  // If a plan was selected from landing page, trigger checkout after vault is ready
+  useEffect(() => {
+    if (selectedPlan && pinReady && mfaVerified && user) {
+      // Go to plan page and trigger checkout
+      setPage('plan')
+      // Small delay to let plan page mount, then trigger checkout
+      setTimeout(() => {
+        const event = new CustomEvent('dr_trigger_checkout', { detail: selectedPlan })
+        window.dispatchEvent(event)
+        setSelectedPlan(null)
+      }, 500)
+    }
+  }, [selectedPlan, pinReady, mfaVerified, user])
 
   return (
     <div className="layout">

@@ -32,10 +32,57 @@ const GOLD_BORDER = 'rgba(201,168,76,0.25)'
 const GOLD_DIM = 'rgba(201,168,76,0.08)'
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function LandingPage({ onLogin, onSignup }) {
+function AnimatedTree() {
+  return (
+    <svg width="120" height="120" viewBox="0 0 100 100" style={{ margin: '0 auto 28px', display: 'block' }}>
+      <style>{`
+        @keyframes drawBranch { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }
+        @keyframes popCircle  { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes fadeRoot   { from { opacity: 0; transform: scaleY(0); } to { opacity: 1; transform: scaleY(1); } }
+        .dr-branch { stroke-dasharray: 200; stroke-dashoffset: 200; animation: drawBranch 1.2s ease forwards; }
+        .dr-circle { transform-origin: center; transform: scale(0); opacity: 0; animation: popCircle 0.4s ease forwards; }
+        .dr-root   { transform-origin: bottom; animation: fadeRoot 0.4s ease forwards; }
+      `}</style>
+      <g transform="translate(50,60)">
+        {/* Trunk */}
+        <rect className="dr-root" x="-4" y="4" width="8" height="22" rx="2" fill="#c9a84c"
+          style={{ animationDelay: '0s' }} />
+        {/* Root tendrils */}
+        <path className="dr-branch" d="M-4,26 Q-11,32 -18,28 M4,26 Q11,32 18,28"
+          fill="none" stroke="#c9a84c" strokeWidth="1.8" strokeLinecap="round"
+          style={{ animationDelay: '0.3s' }} />
+        {/* Main branches */}
+        <path className="dr-branch" d="M0,4 L0,-6 M0,-1 L-16,-15 M0,-1 L16,-15"
+          fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round"
+          style={{ animationDelay: '0.5s' }} />
+        {/* Secondary branches */}
+        <path className="dr-branch" d="M-16,-15 L-26,-27 M-16,-15 L-10,-29 M16,-15 L26,-27 M16,-15 L10,-29 M0,-6 L-6,-22 M0,-6 L6,-22"
+          fill="none" stroke="#c9a84c" strokeWidth="1.8" strokeLinecap="round"
+          style={{ animationDelay: '0.8s' }} />
+        {/* Foliage circles */}
+        {[
+          [-26,-31,7,'0s'],[-10,-33,5.5,'0.1s'],[26,-31,7,'0.15s'],[10,-33,5.5,'0.2s'],
+          [-6,-26,4.5,'0.25s'],[6,-26,4.5,'0.3s'],[0,-39,8,'0.35s'],
+        ].map(([cx,cy,r,delay], i) => (
+          <circle key={i} className="dr-circle" cx={cx} cy={cy} r={r} fill="#c9a84c"
+            opacity={i < 4 ? 0.9 : 0.85}
+            style={{ animationDelay: `${1.0 + parseFloat(delay)}s`, transformOrigin: `${cx}px ${cy}px` }} />
+        ))}
+      </g>
+    </svg>
+  )
+}
+
+export default function LandingPage({ onLogin, onSignup, onPlan }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [billingAnnual, setBillingAnnual] = useState(true)
   const [faqOpen, setFaqOpen] = useState(null)
+
+  const PRICE_IDS = {
+    single_annual:   'price_1TYuBBAT0bYW1W6mK3STHKbN',
+    couples_monthly: 'price_1TYuBOAT0bYW1W6mOOnhSy11',
+    couples_annual:  'price_1TYuBcAT0bYW1W6mD5OGw2Mm',
+  }
 
   useEffect(() => {
     // Smooth scroll for anchor links
@@ -50,8 +97,8 @@ export default function LandingPage({ onLogin, onSignup }) {
 
   const faqs = [
     { q: 'Is my data safe?', a: 'Your vault is encrypted with AES-256, the same standard used by banks and the military. Passwords are encrypted before they leave your device using your personal vault PIN. We cannot read your data even if we wanted to, and neither can anyone else without your PIN.' },
-    { q: 'Who can access my vault?', a: 'Only the people you choose. You nominate beneficiaries and set their access level. They cannot access anything until the dead man\'s switch fires or a verified death certificate is submitted, and even then there is a mandatory 48-hour hold before access is granted.' },
-    { q: 'What is the dead man\'s switch?', a: 'You set a check-in frequency, say every 30 days. If you stop checking in, Digital Relative sends you reminders. If you still do not check in after your full frequency period has passed, your nominated beneficiaries are notified. Nothing happens automatically without this trigger.' },
+    { q: 'Who can access my vault?', a: 'Only the people you choose. You nominate beneficiaries and set their access level. They cannot access anything until the check-in protection fires or a verified death certificate is submitted, and even then there is a mandatory 48-hour hold before access is granted.' },
+    { q: 'What is the check-in protection?', a: 'You set a check-in frequency, say every 30 days. If you stop checking in, Digital Relative sends you reminders. If you still do not check in after your full frequency period has passed, your nominated beneficiaries are notified. Nothing happens automatically without this trigger.' },
     { q: 'Do I need a will?', a: 'Digital Relative does not replace a will, but it works alongside one. We strongly recommend making a will if you have not. Your vault can store your solicitor\'s details and the location of your will so your family can find it quickly.' },
     { q: 'What if I forget my vault PIN?', a: 'Your vault PIN cannot be reset or recovered because we do not store it. If you forget it, your vault contents are permanently inaccessible. We recommend writing your PIN in a secure place, such as stored with your will or in a safe.' },
     { q: 'Can I cancel at any time?', a: 'Yes. Cancel from the My Plan page and your subscription ends at the next billing date. Your data remains accessible until then. After cancellation your account moves to the free plan.' },
@@ -65,39 +112,112 @@ export default function LandingPage({ onLogin, onSignup }) {
       {/* ── NAV ── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: 'rgba(13,27,42,0.92)', backdropFilter: 'blur(12px)',
+        background: 'rgba(13,27,42,0.96)', backdropFilter: 'blur(12px)',
         borderBottom: `1px solid ${BORDER}`,
-        padding: '0 32px', height: 64,
-        display: 'flex', alignItems: 'center', gap: 32,
+        padding: '0 20px', height: 60,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <TreeMark size={32} />
-          <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 18, color: GOLD, fontWeight: 600 }}>Digital Relative</span>
+        {/* Logo */}
+        <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
+          <TreeMark size={28} />
+          <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 17, color: GOLD, fontWeight: 600 }}>Digital Relative</span>
         </a>
 
-        {/* Desktop nav */}
-        <div style={{ display: 'flex', gap: 28, marginLeft: 16, flex: 1 }} className="desktop-nav">
-          {[['#how-it-works','How it works'],['#features','Features'],['#pricing','Pricing'],['#resources','Resources']].map(([href,label]) => (
-            <a key={href} href={href} style={{ fontSize: 14, color: TEXT_SUB, textDecoration: 'none', transition: 'color 0.15s' }}
+        {/* Desktop nav links - hidden on mobile */}
+        <div style={{ display: 'flex', gap: 24, position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}
+          className="landing-desktop-nav">
+          {[['#how-it-works','How it works'],['#features','Features'],['#pricing','Pricing'],['#resources','Resources'],['#faq','FAQ']].map(([href,label]) => (
+            <a key={href} href={href} style={{ fontSize: 13, color: TEXT_SUB, textDecoration: 'none', whiteSpace: 'nowrap' }}
               onMouseEnter={e => e.target.style.color = CREAM} onMouseLeave={e => e.target.style.color = TEXT_SUB}>
               {label}
             </a>
           ))}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
-          <button onClick={onLogin} style={{
+        {/* Right side - desktop buttons + mobile hamburger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* Desktop buttons */}
+          <button onClick={onLogin} className="landing-desktop-nav" style={{
             background: 'transparent', border: `1px solid ${BORDER}`,
-            borderRadius: 8, color: CREAM_DIM, padding: '8px 18px',
+            borderRadius: 8, color: CREAM_DIM, padding: '7px 16px',
             fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
           }}>Log in</button>
-          <button onClick={onSignup} style={{
+          <button onClick={onSignup} className="landing-desktop-nav" style={{
             background: GOLD, border: 'none',
-            borderRadius: 8, color: NAVY, padding: '8px 18px',
+            borderRadius: 8, color: NAVY, padding: '7px 16px',
             fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
           }}>Get started free</button>
+
+          {/* Mobile: just a get started button + hamburger */}
+          <button onClick={onSignup} className="landing-mobile-nav" style={{
+            background: GOLD, border: 'none', borderRadius: 8, color: NAVY,
+            padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Start free</button>
+          <button onClick={() => setMenuOpen(!menuOpen)} className="landing-mobile-nav" style={{
+            background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: 8,
+            color: CREAM, padding: '7px 10px', fontSize: 16, cursor: 'pointer', lineHeight: 1,
+          }}>☰</button>
         </div>
       </nav>
+
+      {/* Mobile menu overlay */}
+      {menuOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(13,27,42,0.99)', backdropFilter: 'blur(8px)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '16px 20px', borderBottom: `1px solid ${BORDER}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TreeMark size={28} />
+              <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 17, color: GOLD, fontWeight: 600 }}>Digital Relative</span>
+            </div>
+            <button onClick={() => setMenuOpen(false)} style={{
+              background: 'transparent', border: 'none', color: CREAM,
+              fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: 4,
+            }}>✕</button>
+          </div>
+
+          {/* Nav links */}
+          <nav style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+            {[
+              ['#how-it-works', 'How it works', '◈'],
+              ['#features', 'Features', '⬡'],
+              ['#pricing', 'Pricing', '◇'],
+              ['#resources', 'Resources', '🔗'],
+              ['#faq', 'FAQ', '?'],
+            ].map(([href, label, icon]) => (
+              <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '16px 0', borderBottom: `1px solid ${BORDER}`,
+                textDecoration: 'none', color: CREAM, fontSize: 17,
+                fontFamily: "'Cormorant Garamond', Georgia, serif",
+              }}>
+                <span style={{ color: GOLD, fontSize: 18, width: 24, textAlign: 'center' }}>{icon}</span>
+                {label}
+              </a>
+            ))}
+          </nav>
+
+          {/* CTA buttons */}
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button onClick={() => { setMenuOpen(false); onSignup() }} style={{
+              background: GOLD, color: NAVY, border: 'none',
+              borderRadius: 10, padding: '14px', fontSize: 15,
+              fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>Get started free</button>
+            <button onClick={() => { setMenuOpen(false); onLogin() }} style={{
+              background: 'transparent', color: CREAM, border: `1px solid ${BORDER}`,
+              borderRadius: 10, padding: '14px', fontSize: 15,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>Log in</button>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO ── */}
       <section style={{
@@ -107,6 +227,8 @@ export default function LandingPage({ onLogin, onSignup }) {
         textAlign: 'center',
       }}>
         <div style={{ maxWidth: 760 }}>
+          <AnimatedTree />
+
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             background: GOLD_DIM, border: `1px solid ${GOLD_BORDER}`,
@@ -271,7 +393,7 @@ export default function LandingPage({ onLogin, onSignup }) {
               { icon: '🔐', title: 'Encrypted vault', body: 'Store passwords, account details, and sensitive information. Encrypted with AES-256 before it ever leaves your device. We cannot read it.' },
               { icon: '📁', title: 'Document storage', body: 'Upload passports, birth certificates, insurance policies, and important documents. Accessible to your family when they need them.' },
               { icon: '💛', title: 'After I\'m Gone guide', body: 'Leave a personal guide for your family. Funeral wishes, messages to loved ones, what to do first. The most important thing you can leave behind.' },
-              { icon: '◎', title: 'Dead man\'s switch', body: 'Check in regularly. If you stop, your beneficiaries are notified automatically. Gives your family the access they need without any guesswork.' },
+              { icon: '◎', title: 'Check-in protection', body: 'Check in regularly. If you stop, your beneficiaries are notified automatically. Gives your family the access they need without any guesswork.' },
               { icon: '👤', title: 'Beneficiary access', body: 'Nominate who gets access and at what level. They verify their identity before accessing anything. Passwords are never accessible.' },
               { icon: '🔒', title: 'Zero-knowledge security', body: 'Your vault PIN never leaves your device. Your encryption key is derived from your PIN. Even if our servers were compromised, your data is unreadable.' },
               { icon: '👨‍👩‍👧‍👦', title: 'Family information', body: 'Store GP details, school contacts, emergency numbers, and family information your family would need immediately after a bereavement.' },
@@ -322,22 +444,24 @@ export default function LandingPage({ onLogin, onSignup }) {
                 name: 'Free', price: '0', period: 'forever', highlight: false,
                 badge: null,
                 features: ['5 vault entries', '1 beneficiary', 'All categories', 'After I\'m Gone guide'],
-                missing: ['Dead man\'s switch', 'Document storage', 'Email support'],
+                missing: ['Check-in protection', 'Document storage', 'Email support'],
                 cta: 'Get started free', action: onSignup,
               },
               {
                 name: 'Single', price: billingAnnual ? '18' : '2.50', period: billingAnnual ? 'per year' : 'per month',
                 highlight: true, badge: 'Most popular',
-                features: ['Unlimited entries', 'Up to 3 beneficiaries', 'All categories', 'Dead man\'s switch', 'Document storage (1GB)', 'Email support', 'After I\'m Gone guide', 'Secure share links'],
+                features: ['Unlimited entries', 'Up to 3 beneficiaries', 'All categories', 'Check-in protection', 'Document storage (1GB)', 'Email support', 'After I\'m Gone guide', 'Secure share links'],
                 missing: [],
-                cta: 'Get started', action: onSignup,
+                cta: 'Get started with Single',
+                action: () => onPlan('single', PRICE_IDS.single_annual),
               },
               {
                 name: 'Couples', price: billingAnnual ? '45' : '5', period: billingAnnual ? 'per year' : 'per month',
                 highlight: false, badge: null,
-                features: ['Everything in Single', '2 vaults included', 'Up to 5 beneficiaries each', 'Shared couples vault', 'Document storage (5GB)', 'Dead man\'s switch for both', 'Priority support'],
+                features: ['Everything in Single', '2 vaults included', 'Up to 5 beneficiaries each', 'Shared couples vault', 'Document storage (5GB)', 'Check-in protection for both', 'Priority support'],
                 missing: [],
-                cta: 'Get started', action: onSignup,
+                cta: 'Get started with Couples',
+                action: () => onPlan('couples', billingAnnual ? PRICE_IDS.couples_annual : PRICE_IDS.couples_monthly),
               },
             ].map(plan => (
               <div key={plan.name} style={{

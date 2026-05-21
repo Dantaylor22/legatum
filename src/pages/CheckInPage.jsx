@@ -61,7 +61,7 @@ export default function CheckInPage() {
         <p style={{ color: 'var(--text-sub)', fontSize: 14, marginBottom: 24, maxWidth: 400, margin: '0 auto 24px' }}>
           {lastCheckin
             ? `Last check-in: ${lastCheckin.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}. ${isOverdue ? 'Beneficiaries will receive unlock invites soon.' : `Next due: ${nextDue.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}.`}`
-            : 'Complete your first check-in to activate the dead man\'s switch.'}
+            : 'Complete your first check-in to activate the check-in protection.'}
         </p>
         <button className="btn-primary" onClick={handleCheckIn} disabled={checking}
           style={{ padding: '14px 44px', fontSize: 15 }}>

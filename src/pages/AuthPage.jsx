@@ -50,7 +50,7 @@ function ForgotPasswordModal({ onClose }) {
     if (!email) { toast.error('Enter your email address'); return }
     setLoading(true)
     try {
-      // Send password reset email — Supabase returns success regardless of whether
+      // Send password reset email - Supabase returns success regardless of whether
       // account exists (prevents email enumeration). Google/Apple users won't receive
       // this email as they have no password, but we show the same message to all.
       await supabase.auth.resetPasswordForEmail(email, {
@@ -58,7 +58,7 @@ function ForgotPasswordModal({ onClose }) {
       })
       setSent(true)
     } catch (err) {
-      toast.error('Could not send reset email — please try again')
+      toast.error('Could not send reset email - please try again')
     } finally {
       setLoading(false)
     }
@@ -104,9 +104,9 @@ function ForgotPasswordModal({ onClose }) {
   )
 }
 
-export default function AuthPage() {
+export default function AuthPage({ onBack, selectedPlan, onClearPlan }) {
   const { signIn, signUp } = useAuth()
-  const [mode, setMode]           = useState('signin')
+  const [mode, setMode]           = useState(selectedPlan ? 'signup' : 'signin')
   const [loading, setLoading]     = useState(false)
   const [oauthLoading, setOauthLoading] = useState(null)
   const [mfaRequired, setMfaRequired]   = useState(false)
@@ -155,6 +155,10 @@ export default function AuthPage() {
         }
       } else {
         await signUp({ email: form.email, password: form.password, fullName: form.fullName })
+        // Store selected plan in sessionStorage to survive email confirmation redirect
+        if (selectedPlan) {
+          sessionStorage.setItem('dr_pending_plan', JSON.stringify(selectedPlan))
+        }
         setSignupEmail(form.email)
         setSignupDone(true)
       }
@@ -203,6 +207,31 @@ export default function AuthPage() {
           <div style={{ fontSize: 11, color: 'var(--text-sub)', letterSpacing: '0.16em', textTransform: 'uppercase', marginTop: 6 }}>Secure Legacy Vault</div>
         </div>
 
+        {/* Back to landing page */}
+        {onBack && (
+          <button onClick={onBack} style={{
+            background: 'transparent', border: 'none', color: 'var(--text-sub)',
+            fontSize: 13, cursor: 'pointer', fontFamily: 'var(--sans)',
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, padding: 0,
+          }}>
+            ← Back to site
+          </button>
+        )}
+
+        {/* Selected plan banner */}
+        {selectedPlan && (
+          <div style={{
+            background: 'var(--gold-dim)', border: '1px solid var(--gold-border)',
+            borderRadius: 'var(--r)', padding: '12px 16px', marginBottom: 16,
+            fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6,
+          }}>
+            <strong style={{ color: 'var(--gold)' }}>
+              {selectedPlan.planId === 'single' ? 'Single plan' : 'Couples plan'} selected
+            </strong>
+            {' '}- Create your account and you will go straight to checkout.
+          </div>
+        )}
+
         {/* MFA screen */}
         {mfaRequired ? (
           <div className="card-static fade-up" style={{ padding: 32 }}>
@@ -219,7 +248,8 @@ export default function AuthPage() {
           </div>
 
         ) : (
-          <div className="card-static fade-up" style={{ padding: 32 }}>
+
+        <div className="card-static fade-up" style={{ padding: 32 }}>
 
             {/* OAuth buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
@@ -227,7 +257,7 @@ export default function AuthPage() {
                 {oauthLoading === 'google' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <GoogleIcon />}
                 Continue with Google
               </button>
-              {/* Apple sign-in — hidden until Apple Developer account is set up
+              {/* Apple sign-in - hidden until Apple Developer account is set up
               <button style={oauthBtnStyle} onClick={() => handleOAuth('apple')} disabled={!!oauthLoading}>
                 {oauthLoading === 'apple' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <AppleIcon />}
                 Continue with Apple

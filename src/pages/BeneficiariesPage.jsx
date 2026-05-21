@@ -83,7 +83,7 @@ function BenModal({ onClose, onSave }) {
           </div>
         </div>
         <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--gold-dim)', borderRadius: 'var(--r)', border: '1px solid var(--gold-border)', fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6 }}>
-          An invite email will be sent to confirm they're a beneficiary. They won't be able to access your vault until the dead man's switch is triggered or you grant direct access.
+          An invite email will be sent to confirm they're a beneficiary. They won't be able to access your vault until the check-in protection is triggered or you grant direct access.
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 22, justifyContent: 'flex-end' }}>
           <button className="btn-ghost" onClick={onClose}>Cancel</button>
@@ -145,7 +145,7 @@ export default function BeneficiariesPage({ onNav }) {
       <div className="fade-up-2 card-static" style={{ borderColor: 'var(--gold-border)', background: 'var(--gold-dim)', marginBottom: 22 }}>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--gold)', marginBottom: 8 }}>How access works</h3>
         <p style={{ fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.7 }}>
-          Beneficiaries only gain access to your vault when the dead man's switch triggers — after your chosen check-in period lapses with no response — or if you manually grant access below. They receive an encrypted invite and must verify their identity to unlock vault contents.
+          Beneficiaries only gain access to your vault when the check-in protection triggers — after your chosen check-in period lapses with no response — or if you manually grant access below. They receive an encrypted invite and must verify their identity to unlock vault contents.
         </p>
       </div>
 

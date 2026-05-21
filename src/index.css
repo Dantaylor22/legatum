@@ -95,3 +95,12 @@ select.input { appearance: none; } textarea.input { resize: vertical; min-height
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── Landing page nav ───────────────────────────────────────────────────────── */
+.landing-desktop-nav { display: flex !important; }
+.landing-mobile-nav  { display: none !important; }
+
+@media (max-width: 768px) {
+  .landing-desktop-nav { display: none !important; }
+  .landing-mobile-nav  { display: flex !important; }
+}

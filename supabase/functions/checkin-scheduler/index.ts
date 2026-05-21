@@ -46,7 +46,7 @@ serve(async (req) => {
 
   const results = { checked: 0, checkinReminders: 0, switchTriggered: 0, expiryEmails: 0, errors: 0 }
 
-  // ── 1. Check-in reminders and dead man's switch ───────────────────────────
+  // ── 1. Check-in reminders and check-in protection ───────────────────────────
   const { data: users, error: usersError } = await supabase
     .from('profiles')
     .select('id, checkin_frequency_days, last_checkin, plan, switch_triggered_at')
@@ -86,7 +86,7 @@ serve(async (req) => {
         }
       }
 
-      // Trigger dead man's switch — only once
+      // Trigger check-in protection — only once
       if (overdueDays >= user.checkin_frequency_days && !user.switch_triggered_at) {
         await triggerDeadMansSwitch(user.id, supabase, now)
         results.switchTriggered++
@@ -204,7 +204,7 @@ async function triggerDeadMansSwitch(userId: string, supabase: any, now: Date) {
     .from('beneficiaries')
     .select('id, email, invite_token, name, status')
     .eq('user_id', userId)
-    // BL-4: Policy decision — dead man's switch fires for beneficiaries who have
+    // BL-4: Policy decision — check-in protection fires for beneficiaries who have
     // accepted the nomination (confirmed) OR completed ID verification (id_verified).
     // email_confirmed status = email verified but Onfido not done — intentionally excluded.
     // These beneficiaries get Tier 1 access once they complete verification.

@@ -56,9 +56,17 @@ Write-Host ""
 $msg = Read-Host "  Enter commit message"
 if (-not $msg) { $msg = "Deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
 
-git add . 2>$null
-git commit -m $msg --quiet 2>$null
-git push --quiet
+git add .
+git commit -m $msg
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  FAILED: Commit failed" -ForegroundColor Red
+    exit 1
+}
+git push
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  FAILED: Push failed" -ForegroundColor Red
+    exit 1
+}
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  FAILED: Git push failed" -ForegroundColor Red
     exit 1

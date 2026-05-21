@@ -56,7 +56,7 @@ const CHECKLIST = [
     id: 'checkin',
     icon: '◎',
     title: 'Set up your check-in',
-    detail: 'The dead man\'s switch ensures your beneficiaries are notified if you become incapacitated. Set your check-in frequency and start checking in regularly.',
+    detail: 'The check-in protection ensures your beneficiaries are notified if you become incapacitated. Set your check-in frequency and start checking in regularly.',
     action: 'checkin',
     actionLabel: 'Set up check-in',
     critical: false,
