@@ -33,7 +33,8 @@ const PLAN_FEATURES = {
 
 export default function PlanPage() {
   const { user, profile } = useAuth()
-  const [loading, setLoading]           = useState(null)
+  const [loading, setLoading]           = useState('') // plan key being loaded
+  const [showDowngradeModal, setShowDowngradeModal] = useState(false)
   const [couplesAnnual, setCouplesAnnual] = useState(false)
 
   const currentPlan = profile?.plan || 'free'
@@ -44,7 +45,7 @@ export default function PlanPage() {
       toast('Connect your Stripe keys in .env to enable payments', { icon: 'ℹ️' })
       return
     }
-    setLoading(priceId)
+    setLoading(planId)
     try {
       // Create checkout session via Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -61,7 +62,7 @@ export default function PlanPage() {
     } catch (e) {
       toast.error(e.message || 'Checkout failed')
     } finally {
-      setLoading(null)
+      setLoading('')
     }
   }
 
@@ -158,10 +159,10 @@ export default function PlanPage() {
 
               <button
                 className={isCurrent ? 'btn-ghost' : 'btn-primary'}
-                disabled={isCurrent || loading === p.priceId}
-                onClick={() => !isCurrent && p.priceId && checkout(p.priceId, p.key)}
+                disabled={isCurrent || loading === p.key}
+                onClick={() => { if (isCurrent) return; if (p.key === 'free') { setShowDowngradeModal(true) } else if (p.priceId) { checkout(p.priceId, p.key) } }}
                 style={{ width: '100%', textAlign: 'center', opacity: isCurrent ? 0.6 : 1 }}>
-                {loading === p.priceId
+                {loading === p.key
                   ? <span className="spinner" style={{ width: 14, height: 14 }} />
                   : isCurrent ? 'Current plan'
                   : p.key === 'free' ? 'Downgrade to free'
@@ -171,6 +172,53 @@ export default function PlanPage() {
           )
         })}
       </div>
+
+      {/* Downgrade confirmation modal */}
+      {showDowngradeModal && (
+        <div className="modal-overlay" onClick={() => setShowDowngradeModal(false)}>
+          <div className="modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
+              <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>
+                Downgrade to Free?
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.6 }}>
+                You will lose access to the following features immediately:
+              </p>
+            </div>
+            <div style={{ background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 20 }}>
+              {[
+                "Vault entries above 5 will become inaccessible (not deleted)",
+                "All uploaded documents will become inaccessible",
+                "Beneficiaries above 1 will lose access invitations",
+                "Dead man's switch will be disabled",
+                "Email reminders for check-ins will stop",
+                "Expiry reminders will stop",
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.5 }}>
+                  <span style={{ color: 'var(--danger)', flexShrink: 0 }}>✗</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 20 }}>
+              Your data is not deleted — if you upgrade again your vault entries and documents will be accessible again. To cancel your subscription, use the Manage subscription button below.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-ghost" onClick={() => setShowDowngradeModal(false)} style={{ flex: 1 }}>
+                Keep my current plan
+              </button>
+              <button className="btn-danger" style={{ flex: 1 }}
+                onClick={async () => {
+                  setShowDowngradeModal(false)
+                  toast('To downgrade, cancel your subscription via Manage subscription. Your plan will revert to Free at the end of your billing period.')
+                }}>
+                I understand — downgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Current billing info */}
       {currentPlan !== 'free' && profile?.plan_renewal && (
