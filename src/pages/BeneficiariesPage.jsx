@@ -179,7 +179,13 @@ export default function BeneficiariesPage({ onNav }) {
                   <div style={{ fontSize: 12, color: 'var(--text-sub)', marginTop: 2 }}>{b.access_level}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span className={`badge badge-${b.status === 'confirmed' ? 'green' : 'muted'}`}>{b.status}</span>
+                  <span className={`badge badge-${
+      b.status === 'access_granted' ? 'gold' :
+      b.status === 'id_verified' ? 'green' :
+      b.status === 'email_confirmed' ? 'green' :
+      b.status === 'declined' || b.status === 'revoked' ? 'danger' :
+      'muted'
+    }`}>{b.status.replace('_', ' ')}</span>
                   <button
                     className={`btn-ghost`}
                     style={{ fontSize: 10, padding: '4px 10px', borderColor: b.is_executor ? 'var(--gold-border)' : undefined, color: b.is_executor ? 'var(--gold)' : undefined }}

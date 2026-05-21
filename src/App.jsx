@@ -37,7 +37,7 @@ const isEmergencyRoute = window.location.pathname === '/emergency-access'
 const isAdminRoute = window.location.pathname === '/admin/review'
 
 function AppInner() {
-  const { user, profile, loading, signOut } = useAuth()
+  const { user, profile, loading, transitioning, signOut } = useAuth()
   const { isLocked }      = useVaultLock()
   const [page, setPage]   = useState('dashboard')
   const [pinReady, setPinReady] = useState(false)
@@ -79,7 +79,7 @@ function AppInner() {
     }
   }, [user, profile])
 
-  if (loading) {
+  if (loading || transitioning) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--navy)' }}>
         <div style={{ textAlign: 'center' }}>

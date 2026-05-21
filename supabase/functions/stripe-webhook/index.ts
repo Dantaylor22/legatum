@@ -21,9 +21,12 @@ serve(async (req) => {
   // Verify signature FIRST — reject anything that isn't from Stripe
   let event: Stripe.Event
   try {
+    console.log('Webhook secret present:', !!secret, 'length:', secret?.length)
+    console.log('Signature present:', !!signature)
+    console.log('Body length:', body?.length)
     event = stripe.webhooks.constructEvent(body, signature, secret)
-  } catch {
-    // Never reveal why verification failed
+  } catch (err) {
+    console.error('Signature verification failed:', err.message)
     return new Response('Forbidden', { status: 403 })
   }
 

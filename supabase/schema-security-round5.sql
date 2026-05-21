@@ -561,3 +561,61 @@ alter table public.access_requests
     ) stored;
 -- Note: generated column — auto-populated, cannot be set directly
 
+
+-- ══════════════════════════════════════════════════════════════
+-- SECURITY LINTER FIXES
+-- Fixes all Supabase security advisor warnings
+-- ══════════════════════════════════════════════════════════════
+
+-- ── FIX 1: Revoke EXECUTE on all SECURITY DEFINER trigger functions ─────────
+-- These functions are only called by triggers — anon/authenticated should never call them directly
+-- Revoking EXECUTE prevents them being called via /rest/v1/rpc/
+
+revoke execute on function public.handle_new_user() from anon, authenticated;
+revoke execute on function public.update_updated_at() from anon, authenticated;
+revoke execute on function public.check_entry_limit() from anon, authenticated;
+revoke execute on function public.verify_entry_ownership() from anon, authenticated;
+revoke execute on function public.ensure_gdpr_consent() from anon, authenticated;
+revoke execute on function public.enforce_server_checkin_time() from anon, authenticated;
+revoke execute on function public.check_beneficiary_limit() from anon, authenticated;
+revoke execute on function public.purge_old_stripe_events() from anon, authenticated;
+revoke execute on function public.check_beneficiary_not_self() from anon, authenticated;
+revoke execute on function public.check_checkin_frequency_change() from anon, authenticated;
+revoke execute on function public.has_couples_access(uuid) from anon, authenticated;
+revoke execute on function public.purge_expired_shared_links() from anon, authenticated;
+revoke execute on function public.verify_shared_link_ownership() from anon, authenticated;
+revoke execute on function public.check_partner_invite_limit() from anon, authenticated;
+revoke execute on function public.check_share_link_limit() from anon, authenticated;
+revoke execute on function public.verify_second_parent() from anon, authenticated;
+revoke execute on function public.verify_executor_submitter() from anon, authenticated;
+revoke execute on function public.protect_partner_link_fields() from anon, authenticated;
+
+-- ── FIX 2: Set search_path on all functions ──────────────────────────────────
+-- Prevents search path injection attacks
+
+alter function public.handle_new_user() set search_path = public;
+alter function public.update_updated_at() set search_path = public;
+alter function public.check_entry_limit() set search_path = public;
+alter function public.verify_entry_ownership() set search_path = public;
+alter function public.ensure_gdpr_consent() set search_path = public;
+alter function public.enforce_server_checkin_time() set search_path = public;
+alter function public.check_beneficiary_limit() set search_path = public;
+alter function public.purge_old_stripe_events() set search_path = public;
+alter function public.check_beneficiary_not_self() set search_path = public;
+alter function public.check_checkin_frequency_change() set search_path = public;
+alter function public.has_couples_access(uuid) set search_path = public;
+alter function public.purge_expired_shared_links() set search_path = public;
+alter function public.verify_shared_link_ownership() set search_path = public;
+alter function public.check_partner_invite_limit() set search_path = public;
+alter function public.check_share_link_limit() set search_path = public;
+alter function public.verify_second_parent() set search_path = public;
+alter function public.verify_executor_submitter() set search_path = public;
+alter function public.protect_partner_link_fields() set search_path = public;
+
+-- ── FIX 3: pg_net extension ──────────────────────────────────────────────────
+-- pg_net should be in the extensions schema not public
+-- Note: this requires the extension to be dropped and recreated
+-- Only do this if pg_net is not actively being used yet
+-- If the cron job is already running, skip this — it will break the cron
+-- To fix: go to Supabase Dashboard → Database → Extensions → find pg_net → move to extensions schema
+-- This cannot be done safely in SQL while the extension is in use

@@ -8,10 +8,12 @@ const AuthContext = createContext(null)
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const inactivityTimer       = useRef(null)
+  const [user, setUser]           = useState(null)
+  const [profile, setProfile]     = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [transitioning, setTransitioning] = useState(false)
+  const inactivityTimer               = useRef(null)
+  const transitionTimer               = useRef(null)
 
   // Reset inactivity timer on user activity
   function resetInactivityTimer() {
@@ -42,6 +44,11 @@ export function AuthProvider({ children }) {
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Brief transition state to prevent flickering between auth states
+      setTransitioning(true)
+      if (transitionTimer.current) clearTimeout(transitionTimer.current)
+      transitionTimer.current = setTimeout(() => setTransitioning(false), 400)
+
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
       else {
@@ -114,7 +121,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, setProfile, loading, signUp, signIn, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ user, profile, setProfile, loading, transitioning, signUp, signIn, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   )

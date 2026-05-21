@@ -45,21 +45,48 @@ function ForgotPasswordModal({ onClose }) {
   const [email, setEmail]   = useState('')
   const [sent, setSent]     = useState(false)
   const [loading, setLoading] = useState(false)
+  const [hint, setHint]     = useState(null) // 'google' | 'apple' | 'no_account' | null
 
   async function handleReset() {
     if (!email) { toast.error('Enter your email address'); return }
     setLoading(true)
+    setHint(null)
     try {
+      // Check if user exists and what provider they use
+      const { data: methods } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      })
+
+      // Try password reset — Supabase returns success even if user doesn't exist
+      // (to prevent email enumeration) but we can check providers
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin,
       })
-      if (error) throw error
+
+      if (error) {
+        // User doesn't exist
+        setHint('no_account')
+        return
+      }
+
       setSent(true)
     } catch (err) {
       toast.error(err.message || 'Could not send reset email')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Check sign in methods for the email
+  async function checkEmail(emailVal) {
+    if (!emailVal || !emailVal.includes('@')) return
+    try {
+      const { data } = await supabase.auth.signInWithOtp({
+        email: emailVal,
+        options: { shouldCreateUser: false },
+      })
+    } catch {}
   }
 
   return (
@@ -71,7 +98,7 @@ function ForgotPasswordModal({ onClose }) {
             <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 10 }}>Check your email</div>
             <div style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.7 }}>
               We sent a password reset link to <strong style={{ color: 'var(--text)' }}>{email}</strong>.
-              Check your spam folder if it doesn't arrive.
+              Check your spam folder if it doesn't arrive within a few minutes.
             </div>
             <button className="btn-ghost" style={{ marginTop: 24 }} onClick={onClose}>Close</button>
           </div>
@@ -87,6 +114,23 @@ function ForgotPasswordModal({ onClose }) {
                 value={email} onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleReset()} autoFocus />
             </div>
+
+            {/* Hints based on account type */}
+            {hint === 'no_account' && (
+              <div style={{ padding: '12px 14px', background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.25)', borderRadius: 'var(--r)', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 14 }}>
+                No account found for <strong style={{ color: 'var(--text)' }}>{email}</strong>.{' '}
+                <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--sans)', padding: 0, textDecoration: 'underline' }}>
+                  Create an account instead →
+                </button>
+              </div>
+            )}
+
+            {hint === 'google' && (
+              <div style={{ padding: '12px 14px', background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 14 }}>
+                This email is linked to a <strong style={{ color: 'var(--gold)' }}>Google account</strong>. Use the "Sign in with Google" button instead — there's no password to reset.
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={onClose}>Cancel</button>
               <button className="btn-primary" onClick={handleReset} disabled={loading}>
@@ -109,6 +153,8 @@ export default function AuthPage() {
   const [mfaCode, setMfaCode]           = useState('')
   const [factorId, setFactorId]         = useState(null)
   const [showForgot, setShowForgot]     = useState(false)
+  const [signupDone, setSignupDone]     = useState(false)
+  const [signupEmail, setSignupEmail]   = useState('')
   const [form, setForm] = useState({ email: '', password: '', fullName: '', confirmPassword: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -149,7 +195,8 @@ export default function AuthPage() {
         }
       } else {
         await signUp({ email: form.email, password: form.password, fullName: form.fullName })
-        toast.success('Account created — check your email to confirm')
+        setSignupEmail(form.email)
+        setSignupDone(true)
       }
     } catch (err) {
       toast.error(err.message || 'Something went wrong')

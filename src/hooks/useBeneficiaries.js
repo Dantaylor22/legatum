@@ -24,7 +24,7 @@ export function useBeneficiaries() {
   async function addBeneficiary(ben) {
     const { data, error } = await supabase
       .from('beneficiaries')
-      .insert([{ ...ben, user_id: user.id, status: 'pending' }])
+      .insert([{ ...ben, user_id: user.id, status: 'invited' }])
       .select()
       .single()
     if (error) throw error
