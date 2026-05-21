@@ -204,7 +204,10 @@ serve(async (req) => {
 
   } catch (err) {
     console.error('Separation error:', err.message)
-    return new Response(JSON.stringify({ error: err.message || 'Separation failed' }), {
+    // FIX HI-3: whitelist safe error messages — never expose internal details
+    const safeMessages = ['Missing required fields', 'Invalid IDs', 'Unauthorised', 'Partner link not found']
+    const msg = safeMessages.some(s => err.message.includes(s)) ? err.message : 'Separation could not be completed. Please contact support.'
+    return new Response(JSON.stringify({ error: msg }), {
       status: 400, headers: { ...hdrs, 'Content-Type': 'application/json' },
     })
   }

@@ -211,7 +211,8 @@ async function triggerDeadMansSwitch(userId: string, supabase: any, now: Date) {
     // These beneficiaries get Tier 1 access once they complete verification.
     // If the ONLY beneficiary is in email_confirmed state, no one gets notified.
     // This is intentional: we require at least email confirmation before firing.
-    .in('status', ['confirmed', 'id_verified'])
+    // FIX MD-4: 'confirmed' status no longer exists — use 'email_confirmed' (round4 schema)
+    .in('status', ['email_confirmed', 'id_verified'])
 
   const { data: authUser } = await supabase.auth.admin.getUserById(userId)
   const ownerName = authUser?.user?.user_metadata?.full_name || 'Your family member'

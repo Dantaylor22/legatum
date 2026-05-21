@@ -8,6 +8,8 @@ import { hasSessionKey } from './lib/crypto'
 import Sidebar from './components/Sidebar'
 import VaultLocked from './components/VaultLocked'
 import VaultPinSetup from './components/VaultPinSetup'
+import MfaSetup from './components/MfaSetup'
+import MfaVerify from './components/MfaVerify'
 import VaultPinEntry from './components/VaultPinEntry'
 import ErrorBoundary from './components/ErrorBoundary'
 import AuthPage from './pages/AuthPage'
@@ -40,7 +42,8 @@ function AppInner() {
   const { user, profile, loading, transitioning, signOut } = useAuth()
   const { isLocked }      = useVaultLock()
   const [page, setPage]   = useState('dashboard')
-  const [pinReady, setPinReady] = useState(false)
+  const [pinReady, setPinReady]     = useState(false)
+  const [mfaVerified, setMfaVerified] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -76,6 +79,9 @@ function AppInner() {
   useEffect(() => {
     if (user && profile && pinIsSet(profile) && hasSessionKey()) {
       setPinReady(true)
+    } else {
+      setPinReady(false)
+      setMfaVerified(false)
     }
   }, [user, profile])
 
@@ -100,6 +106,19 @@ function AppInner() {
   // PIN is set but not entered this session — need PIN entry
   if (profile && pinIsSet(profile) && !hasSessionKey()) {
     return <VaultPinEntry onUnlocked={() => setPinReady(true)} onSignOut={signOut} />
+  }
+
+  // MFA enforcement — email/password users only (OAuth providers handle their own auth)
+  const isOAuthUser = user?.app_metadata?.provider === 'google' || user?.app_metadata?.provider === 'apple'
+  if (!isOAuthUser && pinReady && !mfaVerified) {
+    // Check if MFA is enrolled
+    const hasMfaEnrolled = profile?.mfa_enrolled === true
+    if (!hasMfaEnrolled) {
+      // First time — force MFA setup
+      return <MfaSetup onComplete={() => setMfaVerified(true)} onSignOut={signOut} />
+    }
+    // MFA enrolled — verify it this session
+    return <MfaVerify onVerified={() => setMfaVerified(true)} onSignOut={signOut} />
   }
 
   // Beneficiary-origin users with no own vault see the beneficiary dashboard

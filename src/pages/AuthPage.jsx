@@ -45,48 +45,23 @@ function ForgotPasswordModal({ onClose }) {
   const [email, setEmail]   = useState('')
   const [sent, setSent]     = useState(false)
   const [loading, setLoading] = useState(false)
-  const [hint, setHint]     = useState(null) // 'google' | 'apple' | 'no_account' | null
 
   async function handleReset() {
     if (!email) { toast.error('Enter your email address'); return }
     setLoading(true)
-    setHint(null)
     try {
-      // Check if user exists and what provider they use
-      const { data: methods } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: false },
-      })
-
-      // Try password reset — Supabase returns success even if user doesn't exist
-      // (to prevent email enumeration) but we can check providers
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // Send password reset email — Supabase returns success regardless of whether
+      // account exists (prevents email enumeration). Google/Apple users won't receive
+      // this email as they have no password, but we show the same message to all.
+      await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin,
       })
-
-      if (error) {
-        // User doesn't exist
-        setHint('no_account')
-        return
-      }
-
       setSent(true)
     } catch (err) {
-      toast.error(err.message || 'Could not send reset email')
+      toast.error('Could not send reset email — please try again')
     } finally {
       setLoading(false)
     }
-  }
-
-  // Check sign in methods for the email
-  async function checkEmail(emailVal) {
-    if (!emailVal || !emailVal.includes('@')) return
-    try {
-      const { data } = await supabase.auth.signInWithOtp({
-        email: emailVal,
-        options: { shouldCreateUser: false },
-      })
-    } catch {}
   }
 
   return (
@@ -116,21 +91,6 @@ function ForgotPasswordModal({ onClose }) {
             </div>
 
             {/* Hints based on account type */}
-            {hint === 'no_account' && (
-              <div style={{ padding: '12px 14px', background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.25)', borderRadius: 'var(--r)', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 14 }}>
-                No account found for <strong style={{ color: 'var(--text)' }}>{email}</strong>.{' '}
-                <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--gold)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--sans)', padding: 0, textDecoration: 'underline' }}>
-                  Create an account instead →
-                </button>
-              </div>
-            )}
-
-            {hint === 'google' && (
-              <div style={{ padding: '12px 14px', background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 14 }}>
-                This email is linked to a <strong style={{ color: 'var(--gold)' }}>Google account</strong>. Use the "Sign in with Google" button instead — there's no password to reset.
-              </div>
-            )}
-
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="btn-ghost" onClick={onClose}>Cancel</button>
               <button className="btn-primary" onClick={handleReset} disabled={loading}>
@@ -267,10 +227,12 @@ export default function AuthPage() {
                 {oauthLoading === 'google' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <GoogleIcon />}
                 Continue with Google
               </button>
+              {/* Apple sign-in — hidden until Apple Developer account is set up
               <button style={oauthBtnStyle} onClick={() => handleOAuth('apple')} disabled={!!oauthLoading}>
                 {oauthLoading === 'apple' ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <AppleIcon />}
                 Continue with Apple
               </button>
+              */}
             </div>
 
             {/* Divider */}

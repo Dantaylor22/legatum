@@ -4,13 +4,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3?target
 // Stripe webhook handler — no Stripe npm package (incompatible with Deno edge runtime)
 // Signature verification done manually using Web Crypto API
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// PRICE_TO_PLAN at module level is safe — only reads env vars, no state
 const PRICE_TO_PLAN: Record<string, string> = {
   [Deno.env.get('STRIPE_PRICE_SINGLE_ANNUAL')   || '']: 'single',
   [Deno.env.get('STRIPE_PRICE_COUPLES_MONTHLY') || '']: 'couples',
@@ -66,11 +62,14 @@ async function verifyStripeSignature(
 }
 
 serve(async (req) => {
+  // FIX MD-1: Create supabase client per-request, not at module level
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  )
   const body      = await req.text()
   const signature = req.headers.get('stripe-signature') ?? ''
   const secret    = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? ''
-
-  console.log('Webhook received, secret present:', !!secret, 'sig present:', !!signature)
 
   // Verify Stripe signature
   const valid = await verifyStripeSignature(body, signature, secret)
@@ -97,7 +96,7 @@ serve(async (req) => {
   } catch { /* not found = proceed */ }
 
   try {
-    await handleEvent(event)
+    await handleEvent(event, supabase)
     await supabase.from('stripe_events').insert({
       id: event.id, type: event.type, payload: event.data,
     })
@@ -109,7 +108,7 @@ serve(async (req) => {
   return new Response('OK', { status: 200 })
 })
 
-async function handleEvent(event: any) {
+async function handleEvent(event: any, supabase: any) {
   switch (event.type) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
@@ -148,7 +147,6 @@ async function handleEvent(event: any) {
       }).eq('id', userId)
 
       if (error) console.error('Profile update failed:', error.message)
-      else console.log('Plan updated to', plan, 'for user', userId)
       break
     }
 
@@ -162,7 +160,7 @@ async function handleEvent(event: any) {
         plan_renewal:           null,
         stripe_subscription_id: null,
       }).eq('id', userId)
-      console.log('Plan reset to free for user', userId)
+
       break
     }
 

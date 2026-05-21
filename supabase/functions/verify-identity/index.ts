@@ -138,7 +138,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: hdrs })
     }
     const jwt = authHeader.slice(7)
-    const meRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+    // FIX LO-2: use fetchWithTimeout for JWT verification
+    const meRes = await fetchWithTimeout(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
       headers: { 'Authorization': `Bearer ${jwt}`, 'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')! },
     })
     if (!meRes.ok) {

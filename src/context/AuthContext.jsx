@@ -92,8 +92,10 @@ export function AuthProvider({ children }) {
   async function signIn({ email, password }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    const key = await deriveKey(password, data.user.id)
-    setSessionKey(key)
+    // Do NOT derive a key from the password here.
+    // The vault key is derived from the vault PIN (not the login password).
+    // VaultPinEntry will handle key derivation using PIN + randomSalt from profile.
+    // Deriving here would set the WRONG key (uses deterministic salt, not the user's randomSalt).
     resetInactivityTimer()
     return data
   }

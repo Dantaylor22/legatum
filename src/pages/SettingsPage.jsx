@@ -153,7 +153,14 @@ export default function SettingsPage() {
           </p>
 
           {!hasMfa && !showMfaSetup && (
-            <button className="btn-primary" onClick={startMfaSetup}>Enable 2FA</button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button className="btn-primary" onClick={startMfaSetup}>Set up authenticator app</button>
+            </div>
+          )}
+          {!hasMfa && profile?.mfa_email_fallback && (
+            <div style={{ marginTop: 8, padding: '10px 14px', background: 'var(--gold-dim)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', fontSize: 13, color: 'var(--cream-dim)' }}>
+              ✓ Email verification is active as your 2FA method. Add an authenticator app above for better security.
+            </div>
           )}
 
           {hasMfa && mfaFactors.filter(f => f.status === 'verified').map(f => (

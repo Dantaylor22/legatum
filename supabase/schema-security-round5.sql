@@ -619,3 +619,60 @@ alter function public.protect_partner_link_fields() set search_path = public;
 -- If the cron job is already running, skip this — it will break the cron
 -- To fix: go to Supabase Dashboard → Database → Extensions → find pg_net → move to extensions schema
 -- This cannot be done safely in SQL while the extension is in use
+
+-- ── MFA email OTP codes table ────────────────────────────────────────────────
+-- Used when user has no authenticator app — sends a 6-digit code via Resend
+create table if not exists public.mfa_email_codes (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  code_hash   text not null,           -- SHA-256 hash of the 6-digit code
+  expires_at  timestamptz not null,    -- 10 minutes from creation
+  used        boolean not null default false,
+  attempts    int not null default 0,  -- max 5 attempts
+  created_at  timestamptz not null default now()
+);
+
+-- Index for fast lookup
+create index if not exists mfa_email_codes_user_id_idx on public.mfa_email_codes(user_id);
+
+-- RLS
+alter table public.mfa_email_codes enable row level security;
+
+-- Only service role can read/write (accessed via edge function only)
+-- No policies for anon or authenticated — all access via service role
+
+-- Auto-delete expired codes (keeps table clean)
+create or replace function public.cleanup_mfa_codes()
+returns trigger language plpgsql security definer
+set search_path = public as $$
+begin
+  delete from public.mfa_email_codes where expires_at < now() - interval '1 hour';
+  return new;
+end;
+$$;
+
+drop trigger if exists cleanup_mfa_codes_trigger on public.mfa_email_codes;
+create trigger cleanup_mfa_codes_trigger
+  after insert on public.mfa_email_codes
+  for each statement execute procedure public.cleanup_mfa_codes();
+
+-- Add mfa_method to profiles so we know if user prefers app or email
+alter table public.profiles
+  add column if not exists mfa_enrolled boolean not null default false,
+  add column if not exists mfa_email_fallback boolean not null default false;
+
+-- ── MFA Recovery codes ───────────────────────────────────────────────────────
+-- 10 single-use codes generated when MFA is set up
+-- Stored as SHA-256 hashes — never plaintext
+create table if not exists public.mfa_recovery_codes (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  code_hash  text not null,     -- SHA-256 of the recovery code
+  used       boolean not null default false,
+  used_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists mfa_recovery_codes_user_id_idx on public.mfa_recovery_codes(user_id);
+alter table public.mfa_recovery_codes enable row level security;
+-- No direct client access — all via service role through edge function

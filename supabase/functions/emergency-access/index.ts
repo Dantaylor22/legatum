@@ -186,7 +186,13 @@ serve(async (req) => {
       }
 
       // Decode and verify magic bytes
-      const fileBytes = Uint8Array.from(atob(certificateBase64), c => c.charCodeAt(0))
+      // FIX CR-3: atob throws on invalid base64 — catch it
+      let fileBytes: Uint8Array
+      try {
+        fileBytes = Uint8Array.from(atob(certificateBase64), c => c.charCodeAt(0))
+      } catch {
+        throw new Error('Invalid file type. Please upload PDF, JPG, PNG, or WebP.')
+      }
       if (!verifyMagicBytes(fileBytes, fileType)) {
         throw new Error('File content does not match the declared type. Please upload a real PDF or image.')
       }
@@ -406,9 +412,15 @@ serve(async (req) => {
       const signature = req.headers.get('x-sha2-signature') || ''
 
       if (onfidoWebhookToken && signature) {
+        // FIX MD-3: atob throws on invalid base64 — return 403
+        let sigBuf: Uint8Array
+        try {
+          sigBuf = Uint8Array.from(atob(signature), c => c.charCodeAt(0))
+        } catch {
+          return new Response('Forbidden', { status: 403 })
+        }
         const key   = await crypto.subtle.importKey('raw', new TextEncoder().encode(onfidoWebhookToken), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'])
-        const sigBuf = Uint8Array.from(atob(signature), c => c.charCodeAt(0))
-        const valid  = await crypto.subtle.verify('HMAC', key, sigBuf, new TextEncoder().encode(rawBody))
+        const valid = await crypto.subtle.verify('HMAC', key, sigBuf, new TextEncoder().encode(rawBody))
         if (!valid) return new Response('Forbidden', { status: 403 })
       }
 
