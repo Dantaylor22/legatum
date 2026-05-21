@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { stripePromise, PLANS } from '../lib/stripe'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
