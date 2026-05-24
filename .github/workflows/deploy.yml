@@ -1,10 +1,14 @@
-name: Deploy Edge Functions
+name: Deploy
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'supabase/functions/**'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual deploy (optional)'
+        required: false
+        default: 'Manual deploy from mobile'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -19,6 +23,7 @@ jobs:
         with:
           fetch-depth: 2
 
+      # ── Edge functions ──────────────────────────────────────────────────────
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
@@ -28,22 +33,47 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          CHANGED=$(git diff HEAD~1 --name-only | grep "supabase/functions/" | grep "index.ts" | sed 's|supabase/functions/||' | sed 's|/index.ts||' | grep -v "^_shared$" | sort -u)
-
-          if [ -z "$CHANGED" ]; then
-            echo "No edge functions changed"
-            exit 0
+          # On manual dispatch deploy all functions; on push deploy only changed ones
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANGED=$(ls supabase/functions/ | grep -v "^_shared$")
+            echo "Manual dispatch — deploying all edge functions"
+          else
+            CHANGED=$(git diff HEAD~1 --name-only | grep "supabase/functions/" | grep "index.ts" | sed 's|supabase/functions/||' | sed 's|/index.ts||' | grep -v "^_shared$" | sort -u)
           fi
 
-          echo "Changed functions: $CHANGED"
+          if [ -z "$CHANGED" ]; then
+            echo "No edge functions to deploy"
+          else
+            echo "Deploying: $CHANGED"
+            supabase link --project-ref xqmgfyfqeehjvjxbezgx
+            while IFS= read -r func; do
+              echo "Deploying: $func"
+              if [ "$func" = "stripe-webhook" ]; then
+                supabase functions deploy stripe-webhook --no-verify-jwt
+              else
+                supabase functions deploy "$func"
+              fi
+            done <<< "$CHANGED"
+          fi
 
-          supabase link --project-ref xqmgfyfqeehjvjxbezgx
+      # ── Create source zip ──────────────────────────────────────────────────
+      - name: Create source zip
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          COMMIT=$(git rev-parse --short HEAD)
+          ZIP_NAME="legatum-${DATE}-${COMMIT}.zip"
+          # Zip everything except node_modules, dist, .git
+          zip -r "$ZIP_NAME" . \
+            --exclude "node_modules/*" \
+            --exclude "dist/*" \
+            --exclude ".git/*" \
+            --exclude "*.zip"
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          echo "Created: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
 
-          while IFS= read -r func; do
-            echo "Deploying: $func"
-            if [ "$func" = "stripe-webhook" ]; then
-              supabase functions deploy stripe-webhook --no-verify-jwt
-            else
-              supabase functions deploy "$func"
-            fi
-          done <<< "$CHANGED"
+      - name: Upload source zip as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legatum-source-${{ github.run_number }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30
