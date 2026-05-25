@@ -143,6 +143,20 @@ function BenModal({ onClose, onSave }) {
 
 
 // Filterable combobox - type to filter, pick from list or keep typed value
+const COMMON_RELATIONS = [
+  'Spouse', 'Partner', 'Civil partner',
+  'Son', 'Daughter', 'Child',
+  'Father', 'Mother', 'Parent',
+  'Brother', 'Sister', 'Sibling',
+  'Grandfather', 'Grandmother', 'Grandparent',
+  'Grandson', 'Granddaughter', 'Grandchild',
+  'Uncle', 'Aunt', 'Nephew', 'Niece', 'Cousin',
+  'Stepson', 'Stepdaughter', 'Stepparent',
+  'Friend', 'Close friend',
+  'Solicitor', 'Accountant', 'Financial advisor',
+  'Executor', 'Business partner', 'Carer', 'Other',
+]
+
 function ComboboxInput({ value, onChange, options, placeholder, allowNew = true }) {
   const [open, setOpen]     = useState(false)
   const [query, setQuery]   = useState(value || '')
@@ -204,20 +218,6 @@ function ComboboxInput({ value, onChange, options, placeholder, allowNew = true 
     </div>
   )
 }
-
-const COMMON_RELATIONS = [
-  'Spouse', 'Partner', 'Civil partner',
-  'Son', 'Daughter', 'Child',
-  'Father', 'Mother', 'Parent',
-  'Brother', 'Sister', 'Sibling',
-  'Grandfather', 'Grandmother', 'Grandparent',
-  'Grandson', 'Granddaughter', 'Grandchild',
-  'Uncle', 'Aunt', 'Nephew', 'Niece', 'Cousin',
-  'Stepson', 'Stepdaughter', 'Stepparent',
-  'Friend', 'Close friend',
-  'Solicitor', 'Accountant', 'Financial advisor',
-  'Executor', 'Business partner', 'Carer', 'Other',
-]
 
 export default function BeneficiariesPage({ onNav }) {
   const { profile } = useAuth()
