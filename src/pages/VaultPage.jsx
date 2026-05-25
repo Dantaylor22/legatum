@@ -96,6 +96,40 @@ function CompanySearch({ value, onChange, onSelect }) {
   )
 }
 
+const STRUCTURED_FIELDS = {
+  banking: [
+    { key: 'sort_code',       label: 'Sort code',        placeholder: 'e.g. 20-00-00' },
+    { key: 'account_number',  label: 'Account number',   placeholder: 'e.g. 12345678' },
+    { key: 'iban',            label: 'IBAN (optional)',  placeholder: 'e.g. GB29NWBK...' },
+  ],
+  investments: [
+    { key: 'account_ref',     label: 'Account / policy reference', placeholder: 'e.g. HL-123456' },
+    { key: 'provider',        label: 'Provider',         placeholder: 'e.g. Hargreaves Lansdown' },
+  ],
+  insurance: [
+    { key: 'policy_number',   label: 'Policy number',    placeholder: 'e.g. POL-1234567' },
+    { key: 'sum_assured',     label: 'Sum assured',      placeholder: 'e.g. £250,000' },
+    { key: 'renewal_date',    label: 'Renewal date',     placeholder: 'e.g. 01/03/2026' },
+  ],
+  government: [
+    { key: 'ni_number',       label: 'National Insurance number', placeholder: 'e.g. QQ 12 34 56 A' },
+    { key: 'reference',       label: 'Reference number', placeholder: 'e.g. UTR, NHR...' },
+  ],
+  medical: [
+    { key: 'nhs_number',      label: 'NHS number',       placeholder: 'e.g. 123 456 7890' },
+    { key: 'gp_surgery',      label: 'GP surgery',       placeholder: 'e.g. Elm Street Surgery' },
+  ],
+  property: [
+    { key: 'title_number',    label: 'Land Registry title number', placeholder: 'e.g. GR123456' },
+    { key: 'mortgage_lender', label: 'Mortgage lender',  placeholder: 'e.g. Halifax, Nationwide' },
+    { key: 'mortgage_ref',    label: 'Mortgage reference', placeholder: 'e.g. MOC-1234567' },
+  ],
+  legal: [
+    { key: 'solicitor',       label: 'Solicitor / firm', placeholder: 'e.g. Smith & Co Solicitors' },
+    { key: 'reference',       label: 'File reference',   placeholder: 'e.g. REF/2024/001' },
+  ],
+}
+
 function EntryModal({ entry, onClose, onSave, onDelete }) {
   const isEdit = !!entry?.id
   const [form, setForm] = useState(entry || {
@@ -389,40 +423,6 @@ function EntryModal({ entry, onClose, onSave, onDelete }) {
 }
 
 // Structured fields shown per category
-const STRUCTURED_FIELDS = {
-  banking: [
-    { key: 'sort_code',       label: 'Sort code',        placeholder: 'e.g. 20-00-00' },
-    { key: 'account_number',  label: 'Account number',   placeholder: 'e.g. 12345678' },
-    { key: 'iban',            label: 'IBAN (optional)',  placeholder: 'e.g. GB29NWBK...' },
-  ],
-  investments: [
-    { key: 'account_ref',     label: 'Account / policy reference', placeholder: 'e.g. HL-123456' },
-    { key: 'provider',        label: 'Provider',         placeholder: 'e.g. Hargreaves Lansdown' },
-  ],
-  insurance: [
-    { key: 'policy_number',   label: 'Policy number',    placeholder: 'e.g. POL-1234567' },
-    { key: 'sum_assured',     label: 'Sum assured',      placeholder: 'e.g. £250,000' },
-    { key: 'renewal_date',    label: 'Renewal date',     placeholder: 'e.g. 01/03/2026' },
-  ],
-  government: [
-    { key: 'ni_number',       label: 'National Insurance number', placeholder: 'e.g. QQ 12 34 56 A' },
-    { key: 'reference',       label: 'Reference number', placeholder: 'e.g. UTR, NHR...' },
-  ],
-  medical: [
-    { key: 'nhs_number',      label: 'NHS number',       placeholder: 'e.g. 123 456 7890' },
-    { key: 'gp_surgery',      label: 'GP surgery',       placeholder: 'e.g. Elm Street Surgery' },
-  ],
-  property: [
-    { key: 'title_number',    label: 'Land Registry title number', placeholder: 'e.g. GR123456' },
-    { key: 'mortgage_lender', label: 'Mortgage lender',  placeholder: 'e.g. Halifax, Nationwide' },
-    { key: 'mortgage_ref',    label: 'Mortgage reference', placeholder: 'e.g. MOC-1234567' },
-  ],
-  legal: [
-    { key: 'solicitor',       label: 'Solicitor / firm', placeholder: 'e.g. Smith & Co Solicitors' },
-    { key: 'reference',       label: 'File reference',   placeholder: 'e.g. REF/2024/001' },
-  ],
-}
-
 export default function VaultPage({ onNav }) {
   // Check if duress mode is active - show decoy vault instead of real entries
   const isDuressMode = sessionStorage.getItem('dr_duress_active') === '1'
