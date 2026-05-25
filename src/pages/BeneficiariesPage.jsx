@@ -293,7 +293,7 @@ export default function BeneficiariesPage({ onNav }) {
           <h1 className="page-title">Beneficiaries</h1>
           <p className="page-sub">{beneficiaries.length} of {plan.beneficiaryLimit} slots used</p>
         </div>
-        <button className="btn-primary" onClick={() => atLimit ? onNav('plan') : setShowModal(true)}>
+        <button className="btn-primary" onClick={() => atLimit ? onNav('plan') : (() => { try{sessionStorage.setItem('dr_ben_modal','open')}catch{} setShowModal(true) })()}>
           {atLimit ? 'Upgrade for more' : '+ Add beneficiary'}
         </button>
       </div>

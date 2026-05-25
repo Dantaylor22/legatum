@@ -63,9 +63,15 @@ function AppInner() {
 
   // Reset pinReady if vault genuinely locks (2hr timeout)
   // isLocked comes from useVaultLock polling hasSessionKey() every 2s
+  // Only reset pinReady if locked AND no key in sessionStorage to restore from
   useEffect(() => {
     if (isLocked && pinReady) {
-      setPinReady(false)
+      // Check if key can be restored from sessionStorage before locking UI
+      const hasStoredKey = (() => { try { return !!sessionStorage.getItem('dr_sk') } catch { return false } })()
+      if (!hasStoredKey) {
+        setPinReady(false)
+      }
+      // If key is in sessionStorage, restoreSessionKey() will recover it on next render
     }
   }, [isLocked])
   // Sync navigation with browser history so back/forward buttons work
