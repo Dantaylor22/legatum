@@ -50,6 +50,7 @@ function BenModal({ onClose, onSave, beneficiaries = [] }) {
           </div>
           <div>
             <label className="label">Relationship</label>
+            <div style={{ fontSize: 11, color: 'var(--text-sub)', marginBottom: 4 }}>Pick from the list or type your own.</div>
             <ComboboxInput
               value={form.relation}
               onChange={v => set('relation', v)}
@@ -63,7 +64,7 @@ function BenModal({ onClose, onSave, beneficiaries = [] }) {
               options={['None', ...Array.from(new Set((beneficiaries || []).map(b => b.group_name).filter(Boolean)))]}
               placeholder="Select or create a group"
             />
-            <div style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 4 }}>Type to filter or create a new group. Leave blank for no group.</div>
+            <div style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 4 }}>Type to filter existing groups or create a new one. Select "None" for no group.</div>
 
           </div>
           <div>
