@@ -26,7 +26,7 @@ export async function deriveKey(password, userId, randomSalt) {
     { name: 'PBKDF2', salt: saltInput, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: ALGO, length: KEY_LEN },
-    false,
+    true,  // extractable: true so we can persist across page navigations
     ['encrypt', 'decrypt']
   )
 }
@@ -39,14 +39,45 @@ export function generateSalt() {
 
 // ── Session key — memory only, never persisted ──────────────────────────────
 let _sessionKey = null
-export function setSessionKey(key) { _sessionKey = key }
+export function setSessionKey(key) {
+  _sessionKey = key
+  // Persist to sessionStorage so key survives page navigations
+  if (key) {
+    crypto.subtle.exportKey('jwk', key)
+      .then(jwk => sessionStorage.setItem('dr_sk', JSON.stringify(jwk)))
+      .catch(() => {})
+  }
+}
 export function getSessionKey()    { return _sessionKey }
 export function clearSessionKey()  {
-  if (_sessionKey !== null) {
-    // Log stack trace to identify what's clearing the key
-    console.warn('[DR] clearSessionKey called', new Error().stack?.split('\n').slice(1,4).join(' | '))
-  }
   _sessionKey = null
+  try { sessionStorage.removeItem('dr_sk') } catch {}
+}
+
+// Persist vault key to sessionStorage so it survives page navigations
+// sessionStorage is tab-isolated and cleared when the tab closes
+export async function persistSessionKey() {
+  if (!_sessionKey) return
+  try {
+    const exported = await crypto.subtle.exportKey('jwk', _sessionKey)
+    sessionStorage.setItem('dr_sk', JSON.stringify(exported))
+  } catch {}
+}
+
+// Restore vault key from sessionStorage (after page navigation)
+export async function restoreSessionKey() {
+  try {
+    const stored = sessionStorage.getItem('dr_sk')
+    if (!stored) return false
+    const jwk = JSON.parse(stored)
+    const key  = await crypto.subtle.importKey(
+      'jwk', jwk, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+    )
+    _sessionKey = key
+    return true
+  } catch {
+    return false
+  }
 }
 export function hasSessionKey()    { return _sessionKey !== null }
 

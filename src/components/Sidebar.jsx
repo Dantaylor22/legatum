@@ -171,6 +171,7 @@ export default function Sidebar({ active, onNav }) {
               }}>
                 Sign out
               </button>
+              <div style={{ fontSize: 10, color: 'var(--text-sub)', opacity: 0.4, marginTop: 6, textAlign: 'center' }}>v105</div>
             </div>
           </div>
         )}

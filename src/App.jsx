@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import toast from 'react-hot-toast'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useVaultLock } from './hooks/useVaultLock'
 import { pinIsSet } from './lib/vaultPin'
-import { hasSessionKey } from './lib/crypto'
+import { hasSessionKey, restoreSessionKey } from './lib/crypto'
 import { supabase } from './lib/supabase'
 import Sidebar from './components/Sidebar'
 import VaultLocked from './components/VaultLocked'
@@ -48,6 +48,29 @@ const isAdminRoute = window.location.pathname === '/admin/review'
 function AppInner() {
   const { user, profile, loading, transitioning, signOut, fetchProfile } = useAuth()
   const { isLocked }      = useVaultLock()
+  const [keyRestored, setKeyRestored] = useState(false)
+
+  // Restore vault key from sessionStorage on every page load
+  // This handles the case where Google OAuth redirects caused a page reload
+  useEffect(() => {
+    restoreSessionKey().then(restored => {
+      if (restored) {
+        setPinReady(true)  // key restored - treat as already unlocked
+      }
+      setKeyRestored(true)
+    })
+  }, [])
+
+  // Reset pinReady if vault locks due to genuine inactivity (2hr timeout)
+  // This allows the PIN prompt to reappear after a real timeout
+  // Use a ref to track previous isLocked to avoid re-renders
+  const prevLockedRef = useRef(false)
+  useEffect(() => {
+    if (isLocked && !prevLockedRef.current && pinReady) {
+      setPinReady(false)
+    }
+    prevLockedRef.current = isLocked
+  }, [isLocked, pinReady])
   // Sync navigation with browser history so back/forward buttons work
   const getPageFromUrl = () => {
     const params = new URLSearchParams(window.location.search)
@@ -188,7 +211,12 @@ function AppInner() {
     return <VaultPinSetup onComplete={() => setPinReady(true)} />
   }
 
-  if (profile && pinIsSet(profile) && !hasSessionKey()) {
+  if (!keyRestored) {
+    // Wait for sessionStorage key restoration before deciding to show PIN prompt
+    return null
+  }
+
+  if (profile && pinIsSet(profile) && !hasSessionKey() && !pinReady) {
     return <VaultPinEntry onUnlocked={() => setPinReady(true)} onSignOut={signOut} />
   }
 
