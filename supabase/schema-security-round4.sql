@@ -8,6 +8,7 @@
 drop policy if exists "Users can update own safe fields" on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
 
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
   for update
   using (auth.uid() = id)
@@ -23,16 +24,20 @@ create policy "Users can update own profile" on public.profiles
 -- ── FIX DB-2 [HIGH]: Split vault_entries FOR ALL into granular policies ──
 drop policy if exists "Users can manage own entries" on public.vault_entries;
 
+drop policy if exists "Users can select own entries" on public.vault_entries;
 create policy "Users can select own entries" on public.vault_entries
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own entries" on public.vault_entries;
 create policy "Users can insert own entries" on public.vault_entries
   for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update own entries" on public.vault_entries;
 create policy "Users can update own entries" on public.vault_entries
   for update using (auth.uid() = user_id)
   with check (auth.uid() = user_id and user_id = user_id);
 
+drop policy if exists "Users can delete own entries" on public.vault_entries;
 create policy "Users can delete own entries" on public.vault_entries
   for delete using (auth.uid() = user_id);
 
@@ -40,6 +45,7 @@ create policy "Users can delete own entries" on public.vault_entries
 -- Strip ip_address from client inserts — set via trigger from request context
 drop policy if exists "Users can insert own checkins" on public.checkin_log;
 
+drop policy if exists "Users can insert own checkins" on public.checkin_log;
 create policy "Users can insert own checkins" on public.checkin_log
   for insert with check (
     auth.uid() = user_id
@@ -51,12 +57,14 @@ drop policy if exists "Beneficiaries confirm own invite" on public.beneficiaries
 
 -- USING clause: only rows with a token and pending status
 -- WITH CHECK: can only set status to confirmed (token already matched by USING)
+drop policy if exists "Beneficiaries confirm own invite" on public.beneficiaries;
 create policy "Beneficiaries confirm own invite" on public.beneficiaries
   for update
   using  (invite_token is not null and status = 'pending')
   with check (status = 'confirmed');
 
 -- ── FIX DB-6 [MEDIUM]: Explicit deny-all on rate_limits ──────
+drop policy if exists "deny all rate_limits" on public.rate_limits;
 drop policy if exists "deny all rate_limits" on public.rate_limits;
 create policy "deny all rate_limits" on public.rate_limits
   for all using (false);
@@ -182,6 +190,7 @@ create table if not exists public.after_i_am_gone (
 );
 
 alter table public.after_i_am_gone enable row level security;
+drop policy if exists "Users can manage own guide" on public.after_i_am_gone;
 create policy "Users can manage own guide" on public.after_i_am_gone
   for all using (auth.uid() = user_id);
 
@@ -220,6 +229,7 @@ create trigger vault_documents_updated_at before update on public.vault_document
   for each row execute procedure public.update_updated_at();
 
 alter table public.vault_documents enable row level security;
+drop policy if exists "Users can manage own documents" on public.vault_documents;
 create policy "Users can manage own documents" on public.vault_documents
   for all using (auth.uid() = user_id);
 
@@ -247,6 +257,7 @@ create table if not exists public.beneficiary_verifications (
 
 alter table public.beneficiary_verifications enable row level security;
 -- Only service role can manage verifications
+drop policy if exists "No public access to verifications" on public.beneficiary_verifications;
 create policy "No public access to verifications" on public.beneficiary_verifications
   for all using (false);
 
@@ -333,9 +344,11 @@ create table if not exists public.notifications (
 create index if not exists notifications_user_id_idx on public.notifications(user_id, read);
 alter table public.notifications enable row level security;
 -- D-2 fix: split into separate policies — users can only mark as read, not mutate type/title/message
+drop policy if exists "Users can read own notifications" on public.notifications;
 create policy "Users can read own notifications" on public.notifications
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can mark own notifications read" on public.notifications;
 create policy "Users can mark own notifications read" on public.notifications
   for update using (auth.uid() = user_id)
   with check (
@@ -347,6 +360,7 @@ create policy "Users can mark own notifications read" on public.notifications
     and action_url is not distinct from (select action_url from public.notifications n where n.id = notifications.id)
   );
 
+drop policy if exists "Users can delete own notifications" on public.notifications;
 create policy "Users can delete own notifications" on public.notifications
   for delete using (auth.uid() = user_id);
 -- Note: INSERT is service-role only (no client insert policy)
@@ -367,8 +381,10 @@ create table if not exists public.partner_links (
 );
 
 alter table public.partner_links enable row level security;
+drop policy if exists "Users can see own partner links" on public.partner_links;
 create policy "Users can see own partner links" on public.partner_links
   for select using (auth.uid() = requester_id or auth.uid() = partner_id);
+drop policy if exists "Users can create partner link requests" on public.partner_links;
 create policy "Users can create partner link requests" on public.partner_links
   for insert with check (auth.uid() = requester_id);
 create policy "Users can update partner links they're involved in" on public.partner_links
@@ -385,6 +401,7 @@ alter table public.vault_entries
   add column if not exists is_shared boolean not null default false;
 
 -- RLS for shared entries: accessible to both partners
+drop policy if exists "Partners can access shared entries" on public.vault_entries;
 create policy "Partners can access shared entries" on public.vault_entries
   for all using (
     is_shared = true and partner_link_id in (
@@ -397,6 +414,7 @@ create policy "Partners can access shared entries" on public.vault_entries
 -- ── Partner vault read access (non-shared private entries) ─────
 -- Partners can READ each other's private vault entries (not passwords)
 -- Passwords still require that person's PIN
+drop policy if exists "Partners can read each other private entries" on public.vault_entries;
 create policy "Partners can read each other private entries" on public.vault_entries
   for select using (
     is_shared = false and user_id in (
@@ -415,6 +433,7 @@ create policy "Partners can read each other private entries" on public.vault_ent
   );
 
 -- Partner document access
+drop policy if exists "Partners can read each other documents" on public.vault_documents;
 create policy "Partners can read each other documents" on public.vault_documents
   for select using (
     user_id in (
@@ -506,6 +525,7 @@ create table if not exists public.refunds (
 );
 
 alter table public.refunds enable row level security;
+drop policy if exists "Users can view own refunds" on public.refunds;
 create policy "Users can view own refunds" on public.refunds
   for select using (auth.uid() = user_id);
 
@@ -524,6 +544,7 @@ create table if not exists public.family_info (
 );
 
 alter table public.family_info enable row level security;
+drop policy if exists "Users can manage own family info" on public.family_info;
 create policy "Users can manage own family info" on public.family_info
   for all using (auth.uid() = user_id);
 
@@ -549,10 +570,12 @@ create index if not exists dependants_user_id_idx on public.dependants(user_id);
 create index if not exists dependants_type_idx on public.dependants(user_id, type);
 
 alter table public.dependants enable row level security;
+drop policy if exists "Users can manage own dependants" on public.dependants;
 create policy "Users can manage own dependants" on public.dependants
   for all using (auth.uid() = user_id);
 
 -- Second parent can read if access_control = both_parents
+drop policy if exists "Second parent can read child profiles" on public.dependants;
 create policy "Second parent can read child profiles" on public.dependants
   for select using (
     access_control = 'both_parents'
@@ -582,6 +605,7 @@ create table if not exists public.separations (
 
 alter table public.separations enable row level security;
 -- Both former partners can view separation record
+drop policy if exists "Partners can view own separation" on public.separations;
 create policy "Partners can view own separation" on public.separations
   for select using (
     partner_link_id in (
@@ -642,6 +666,7 @@ create index if not exists shared_links_expires_idx on public.shared_links(expir
 alter table public.shared_links enable row level security;
 
 -- Owners can manage their own links
+drop policy if exists "Users can manage own shared links" on public.shared_links;
 create policy "Users can manage own shared links" on public.shared_links
   for all using (auth.uid() = user_id);
 

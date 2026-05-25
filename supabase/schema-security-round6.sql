@@ -17,6 +17,7 @@ drop policy if exists "Beneficiary can read vault entries"  on public.vault_entr
 
 -- Ensure after_i_am_gone is locked down (only auth owner can read)
 drop policy if exists "Users can manage own guide" on public.after_i_am_gone;
+drop policy if exists "Users can manage own guide" on public.after_i_am_gone;
 create policy "Users can manage own guide" on public.after_i_am_gone
   for all using (auth.uid() = user_id);
 
@@ -32,6 +33,7 @@ update public.beneficiaries
 
 -- ── H-2 FIX: Allow linked beneficiary to accept or decline nomination ──
 -- BeneficiaryDashboard.jsx needs to update status for the linked user's own nominations
+drop policy if exists "Linked user can accept or decline nomination" on public.beneficiaries;
 drop policy if exists "Linked user can accept or decline nomination" on public.beneficiaries;
 create policy "Linked user can accept or decline nomination" on public.beneficiaries
   for update
@@ -72,6 +74,7 @@ create table if not exists public.beneficiary_shared_entries (
   unique (beneficiary_id, entry_id)
 );
 alter table public.beneficiary_shared_entries enable row level security;
+drop policy if exists "Users can manage shared entries for own beneficiaries" on public.beneficiary_shared_entries;
 drop policy if exists "Users can manage shared entries for own beneficiaries" on public.beneficiary_shared_entries;
 create policy "Users can manage shared entries for own beneficiaries" on public.beneficiary_shared_entries
   for all using (
@@ -114,6 +117,7 @@ create table if not exists public.device_log (
 );
 create index if not exists device_log_user_idx on public.device_log(user_id, created_at desc);
 alter table public.device_log enable row level security;
+drop policy if exists "Users can view own device log" on public.device_log;
 create policy "Users can view own device log" on public.device_log
   for select using (auth.uid() = user_id);
 -- Only service role can insert (via edge function)
@@ -143,6 +147,7 @@ create index if not exists vev_entry_idx on public.vault_entry_versions(entry_id
 alter table public.vault_entry_versions
   add column if not exists secure_content text default null;
 alter table public.vault_entry_versions enable row level security;
+drop policy if exists "Users can manage own entry versions" on public.vault_entry_versions;
 create policy "Users can manage own entry versions" on public.vault_entry_versions
   for all using (auth.uid() = user_id);
 
@@ -169,6 +174,7 @@ create table if not exists public.decoy_entries (
   created_at timestamptz not null default now()
 );
 alter table public.decoy_entries enable row level security;
+drop policy if exists "Users can manage own decoy entries" on public.decoy_entries;
 create policy "Users can manage own decoy entries" on public.decoy_entries
   for all using (auth.uid() = user_id);
 
@@ -192,12 +198,15 @@ create table if not exists public.vault_recovery_codes (
 );
 alter table public.vault_recovery_codes enable row level security;
 -- B-5 fix: split policies to prevent client corrupting encrypted_pin or used_at
+drop policy if exists "Users read own recovery codes" on public.vault_recovery_codes;
 create policy "Users read own recovery codes" on public.vault_recovery_codes
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users insert own recovery codes" on public.vault_recovery_codes;
 create policy "Users insert own recovery codes" on public.vault_recovery_codes
   for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Users update own recovery code fetch_count and used_at" on public.vault_recovery_codes;
 create policy "Users update own recovery code fetch_count and used_at" on public.vault_recovery_codes
   for update using (auth.uid() = user_id)
   with check (
@@ -207,6 +216,7 @@ create policy "Users update own recovery code fetch_count and used_at" on public
     and code_index    = (select code_index    from public.vault_recovery_codes r where r.id = vault_recovery_codes.id)
   );
 
+drop policy if exists "Users delete own recovery codes" on public.vault_recovery_codes;
 create policy "Users delete own recovery codes" on public.vault_recovery_codes
   for delete using (auth.uid() = user_id);
 
@@ -260,6 +270,7 @@ create table if not exists public.push_subscriptions (
   unique (user_id, endpoint)
 );
 alter table public.push_subscriptions enable row level security;
+drop policy if exists "Users manage own push subscriptions" on public.push_subscriptions;
 create policy "Users manage own push subscriptions" on public.push_subscriptions
   for all using (auth.uid() = user_id);
 create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions(user_id) where active = true;
@@ -290,6 +301,7 @@ create table if not exists public.webauthn_credentials (
   last_used_at    timestamptz
 );
 alter table public.webauthn_credentials enable row level security;
+drop policy if exists "Users manage own WebAuthn credentials" on public.webauthn_credentials;
 create policy "Users manage own WebAuthn credentials" on public.webauthn_credentials
   for all using (auth.uid() = user_id);
 create index if not exists webauthn_creds_user_idx on public.webauthn_credentials(user_id);
@@ -321,3 +333,22 @@ alter table public.webauthn_challenges enable row level security;
 -- C-3 fix: token expiry for emergency access tokens
 alter table public.beneficiaries
   add column if not exists token_expires_at timestamptz default null;
+
+-- B-4 fix: full profiles WITH CHECK with all security columns locked
+-- (runs in round6 after all ADD COLUMN statements have executed)
+drop policy if exists "Users can update own profile" on public.profiles;
+create policy "Users can update own profile" on public.profiles
+  for update using (auth.uid() = id)
+  with check (
+    auth.uid() = id
+    and plan                                 = (select plan                     from public.profiles where id = auth.uid())
+    and coalesce(stripe_customer_id, '')     = coalesce((select stripe_customer_id     from public.profiles where id = auth.uid()), '')
+    and coalesce(stripe_subscription_id, '') = coalesce((select stripe_subscription_id from public.profiles where id = auth.uid()), '')
+    and coalesce(plan_renewal::text, '')     = coalesce((select plan_renewal::text     from public.profiles where id = auth.uid()), '')
+    and mfa_enrolled       = (select mfa_enrolled       from public.profiles where id = auth.uid())
+    and mfa_email_fallback = (select mfa_email_fallback from public.profiles where id = auth.uid())
+    and coalesce(switch_triggered_at::text, '') = coalesce((select switch_triggered_at::text from public.profiles where id = auth.uid()), '')
+    and coalesce(mfa_backup_email, '')          = coalesce((select mfa_backup_email          from public.profiles where id = auth.uid()), '')
+    -- Note: duress_pin_set intentionally NOT locked here (users legitimately set it)
+  );
+

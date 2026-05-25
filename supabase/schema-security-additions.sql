@@ -28,6 +28,7 @@ create table if not exists public.audit_log (
 create index if not exists audit_log_user_id_idx on public.audit_log(user_id);
 create index if not exists audit_log_created_at_idx on public.audit_log(created_at);
 alter table public.audit_log enable row level security;
+drop policy if exists "Users can view own audit log" on public.audit_log;
 create policy "Users can view own audit log" on public.audit_log for select using (auth.uid() = user_id);
 -- Only service role can insert audit logs
 
@@ -35,25 +36,14 @@ create policy "Users can view own audit log" on public.audit_log for select usin
 -- (Plan can only be updated by service role via webhook)
 drop policy if exists "Users can update own profile" on public.profiles;
 drop policy if exists "Users can update own safe fields" on public.profiles;
--- CRIT-2 fix: WITH CHECK must restrict columns, not just ownership
--- Plan, stripe IDs, and security columns can only be set by service role
-create policy "Users can update own safe fields" on public.profiles
+create policy "Users can update own profile" on public.profiles
   for update using (auth.uid() = id)
   with check (
     auth.uid() = id
-    -- Block plan escalation and stripe ID manipulation by comparing candidate value to existing
-    and plan           = (select plan            from public.profiles where id = auth.uid())
+    and plan                     = (select plan                     from public.profiles where id = auth.uid())
     and coalesce(stripe_customer_id, '')     = coalesce((select stripe_customer_id     from public.profiles where id = auth.uid()), '')
     and coalesce(stripe_subscription_id, '') = coalesce((select stripe_subscription_id from public.profiles where id = auth.uid()), '')
     and coalesce(plan_renewal::text, '')     = coalesce((select plan_renewal::text     from public.profiles where id = auth.uid()), '')
-    -- Block mfa_enrolled and mfa_email_fallback being set directly by the client
-    and mfa_enrolled       = (select mfa_enrolled       from public.profiles where id = auth.uid())
-    and mfa_email_fallback = (select mfa_email_fallback from public.profiles where id = auth.uid())
-    -- B-4 fix: block additional security-sensitive fields from client mutation
-    and coalesce(switch_triggered_at::text, '') = coalesce((select switch_triggered_at::text from public.profiles where id = auth.uid()), '')
-    and coalesce(mfa_backup_email, '')          = coalesce((select mfa_backup_email          from public.profiles where id = auth.uid()), '')
-    -- Note: duress_pin_set and duress_key_verification intentionally NOT locked here
-    -- Users legitimately set these via DuressPinSetup — they are personal security prefs, not privilege fields
   );
 
 -- 4. Prevent beneficiary token enumeration
@@ -121,6 +111,7 @@ drop policy if exists "Beneficiaries can confirm via token" on public.beneficiar
 
 -- New: only allow updating status to 'confirmed' when token matches
 -- and prevent changing any other field
+drop policy if exists "Beneficiaries confirm own invite" on public.beneficiaries;
 create policy "Beneficiaries confirm own invite" on public.beneficiaries
   for update
   using (invite_token is not null and status = 'pending')
@@ -144,6 +135,7 @@ drop policy if exists "Service can insert profiles" on public.profiles;
 -- Profile creation is handled by the trigger (security definer) so no client insert needed
 
 -- Ensure stripe_events has no user-accessible policies (service role only)
+drop policy if exists "No public access to stripe events" on public.stripe_events;
 drop policy if exists "No public access to stripe events" on public.stripe_events;
 create policy "No public access to stripe events" on public.stripe_events
   for all using (false); -- Completely blocked for all non-service-role

@@ -8,6 +8,7 @@
 drop policy if exists "Users can update partner links they're involved in" on public.partner_links;
 
 -- Only the recipient (non-requester) can accept/decline an invite
+drop policy if exists "Partner can accept or decline invite" on public.partner_links;
 create policy "Partner can accept or decline invite" on public.partner_links
   for update
   using (auth.uid() = partner_id and status = 'pending')
@@ -20,6 +21,7 @@ create policy "Partner can accept or decline invite" on public.partner_links
   );
 
 -- Either party can update their own sharing flag only
+drop policy if exists "Requester can update own sharing flag" on public.partner_links;
 create policy "Requester can update own sharing flag" on public.partner_links
   for update
   using (auth.uid() = requester_id and status = 'accepted')
@@ -31,6 +33,7 @@ create policy "Requester can update own sharing flag" on public.partner_links
     -- couples_payer_id, invite_code, separated_at, billing_note — NOT changeable by client
   );
 
+drop policy if exists "Partner can update own sharing flag" on public.partner_links;
 create policy "Partner can update own sharing flag" on public.partner_links
   for update
   using (auth.uid() = partner_id and status = 'accepted')
@@ -61,15 +64,18 @@ comment on column public.partner_links.separated_at is
 -- Don't allow client to set second_parent_id directly — require edge function
 drop policy if exists "Users can manage own dependants" on public.dependants;
 
+drop policy if exists "Users can select own dependants" on public.dependants;
 create policy "Users can select own dependants" on public.dependants
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own dependants" on public.dependants;
 create policy "Users can insert own dependants" on public.dependants
   for insert with check (
     auth.uid() = user_id
     and second_parent_id is null  -- Cannot set second_parent_id on insert
   );
 
+drop policy if exists "Users can update own dependants" on public.dependants;
 create policy "Users can update own dependants" on public.dependants
   for update using (auth.uid() = user_id)
   with check (
@@ -82,6 +88,7 @@ create policy "Users can update own dependants" on public.dependants
     -- NEW-7 fix: second_parent_id must remain unchanged; set only via service-role edge function
   );
 
+drop policy if exists "Users can delete own dependants" on public.dependants;
 create policy "Users can delete own dependants" on public.dependants
   for delete using (auth.uid() = user_id);
 
@@ -115,9 +122,11 @@ create trigger verify_shared_link_ownership
 -- ── FIX DB-NEW-6 [MEDIUM]: notifications — users cannot INSERT ──
 drop policy if exists "Users can manage own notifications" on public.notifications;
 
+drop policy if exists "Users can read own notifications" on public.notifications;
 create policy "Users can read own notifications" on public.notifications
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can update own notifications" on public.notifications;
 create policy "Users can update own notifications" on public.notifications
   for update using (auth.uid() = user_id)
   with check (
@@ -128,6 +137,7 @@ create policy "Users can update own notifications" on public.notifications
 -- Service role inserts notifications (bypasses RLS)
 
 -- ── FIX DB-NEW-7 [LOW]: explicit deny on separations for users ──
+drop policy if exists "Users cannot insert separations" on public.separations;
 create policy "Users cannot insert separations" on public.separations
   for insert with check (false);
 -- Service role creates separations via edge function
@@ -136,6 +146,7 @@ create policy "Users cannot insert separations" on public.separations
 drop policy if exists "Partners can access shared entries" on public.vault_entries;
 
 -- Split into granular policies for shared entries
+drop policy if exists "Partners can read shared entries" on public.vault_entries;
 create policy "Partners can read shared entries" on public.vault_entries
   for select using (
     is_shared = true and partner_link_id in (
@@ -145,6 +156,7 @@ create policy "Partners can read shared entries" on public.vault_entries
     )
   );
 
+drop policy if exists "Partners can insert shared entries" on public.vault_entries;
 create policy "Partners can insert shared entries" on public.vault_entries
   for insert with check (
     is_shared = true and partner_link_id in (
@@ -155,6 +167,7 @@ create policy "Partners can insert shared entries" on public.vault_entries
     and auth.uid() = user_id
   );
 
+drop policy if exists "Partners can update shared entries" on public.vault_entries;
 create policy "Partners can update shared entries" on public.vault_entries
   for update using (
     is_shared = true and partner_link_id in (
@@ -345,6 +358,7 @@ create trigger access_requests_updated_at before update on public.access_request
 alter table public.access_requests enable row level security;
 
 -- Beneficiaries can see requests they submitted
+drop policy if exists "Submitter can view own requests" on public.access_requests;
 create policy "Submitter can view own requests" on public.access_requests
   for select using (
     submitted_by in (
@@ -353,10 +367,12 @@ create policy "Submitter can view own requests" on public.access_requests
   );
 
 -- Vault owner can see requests about their vault
+drop policy if exists "Owner can view access requests" on public.access_requests;
 create policy "Owner can view access requests" on public.access_requests
   for select using (auth.uid() = vault_owner_id);
 
 -- Vault owner can respond (deny/approve) while alive
+drop policy if exists "Owner can respond to access requests" on public.access_requests;
 create policy "Owner can respond to access requests" on public.access_requests
   for update using (auth.uid() = vault_owner_id)
   with check (
@@ -365,6 +381,7 @@ create policy "Owner can respond to access requests" on public.access_requests
   );
 
 -- No client inserts — only via edge function (service role)
+drop policy if exists "No direct inserts" on public.access_requests;
 create policy "No direct inserts" on public.access_requests
   for insert with check (false);
 
@@ -425,6 +442,7 @@ create table if not exists public.admin_actions (
 
 alter table public.admin_actions enable row level security;
 -- No client access to admin actions
+drop policy if exists "No client access to admin actions" on public.admin_actions;
 create policy "No client access to admin actions" on public.admin_actions
   for all using (false);
 
@@ -453,6 +471,7 @@ alter table public.beneficiaries
 
 -- FIX DB-EA-2: Owner can only respond to open requests
 drop policy if exists "Owner can respond to access requests" on public.access_requests;
+drop policy if exists "Owner can respond to access requests" on public.access_requests;
 create policy "Owner can respond to access requests" on public.access_requests
   for update using (
     auth.uid() = vault_owner_id
@@ -465,6 +484,7 @@ create policy "Owner can respond to access requests" on public.access_requests
 
 -- FIX DB-EA-3: Submitter SELECT policy — only the actual submitter, not all beneficiaries
 drop policy if exists "Submitter can view own requests" on public.access_requests;
+drop policy if exists "Submitter can view own request" on public.access_requests;
 create policy "Submitter can view own request" on public.access_requests
   for select using (
     submitted_by in (
@@ -475,6 +495,7 @@ create policy "Submitter can view own request" on public.access_requests
   );
 
 -- FIX DB-EA-5: Second parent access expires on separation
+drop policy if exists "Second parent can read child profiles" on public.dependants;
 drop policy if exists "Second parent can read child profiles" on public.dependants;
 create policy "Second parent can read child profiles" on public.dependants
   for select using (
@@ -544,12 +565,15 @@ create trigger protect_partner_link_fields
 -- ── FIX DB-5: shared_links — no direct DELETE (revoke via update only) ─
 drop policy if exists "Users can manage own shared links" on public.shared_links;
 
+drop policy if exists "Users can read own shared links" on public.shared_links;
 create policy "Users can read own shared links" on public.shared_links
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own shared links" on public.shared_links;
 create policy "Users can insert own shared links" on public.shared_links
   for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Users can update own shared links" on public.shared_links;
 create policy "Users can update own shared links" on public.shared_links
   for update using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
