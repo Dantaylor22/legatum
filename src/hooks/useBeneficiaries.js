@@ -22,9 +22,11 @@ export function useBeneficiaries() {
   useEffect(() => { fetch() }, [fetch])
 
   async function addBeneficiary(ben) {
+    // Map UI 'trust_only' value to DB 'none' (check constraint: none|id_only|death_certificate)
+    const dbBen = { ...ben, access_requirement: ben.access_requirement === 'trust_only' ? 'none' : (ben.access_requirement || 'none') }
     const { data, error } = await supabase
       .from('beneficiaries')
-      .insert([{ ...ben, user_id: user.id, status: 'invited' }])
+      .insert([{ ...dbBen, user_id: user.id, status: 'invited' }])
       .select()
       .single()
     if (error) throw error
@@ -32,7 +34,7 @@ export function useBeneficiaries() {
     // Send invite email and notify vault owner via edge function
     supabase.functions.invoke('send-beneficiary-invite', {
       body: { beneficiaryId: data.id, action: 'send_initial_invite' },
-    }).catch(() => {}) // best-effort - never block the UI
+    }).then(() => {}).catch(() => {}) // best-effort - never block the UI
     return data
   }
 

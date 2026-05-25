@@ -32,6 +32,7 @@ export default function SettingsPage() {
   const [deviceTrusted, setDeviceTrusted]   = useState(() => user ? hasTrustedDevice(user.id) : false)
   const [showRecoveryCodes, setShowRecoveryCodes] = useState(false)
   const [showWebAuthn, setShowWebAuthn] = useState(false)
+  const [showContactModal, setShowContactModal] = useState(false)
   const { supported: pushSupported, permission: pushPermission, subscribed: pushSubscribed,
           loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications()
   const [showDuressSetup, setShowDuressSetup] = useState(false)
@@ -204,8 +205,64 @@ export default function SettingsPage() {
       const hashBuffer  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(exportJson))
       const hashHex     = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
       const finalExport = { ...exportPayload, _integrity: { sha256: hashHex, generated_at: new Date().toISOString() } }
-      const blob = new Blob([JSON.stringify(finalExport, null, 2)], { type: 'application/json' })
-      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `digital-relative-export-${Date.now()}.json` })
+      // Build human-readable HTML report
+      const htmlEntries  = (exportPayload.vault_entries || [])
+      const htmlBens     = (exportPayload.beneficiaries || [])
+      const htmlProf     = exportPayload.profile || {}
+      const htmlNotifs   = (exportPayload.notifications || [])
+      const htmlDevs     = (exportPayload.device_log || [])
+      const dateStr  = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })
+      const fmt      = d => d ? new Date(d).toLocaleDateString('en-GB') : ''
+
+      const htmlReport = [
+        '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">',
+        '<title>Digital Relative - My Data Export</title>',
+        '<style>body{font-family:-apple-system,sans-serif;max-width:900px;margin:40px auto;padding:0 20px;color:#333}',
+        'h1{color:#0d1b2a;border-bottom:3px solid #c9a84c;padding-bottom:10px}h2{color:#0d1b2a;margin-top:28px;font-size:1.1rem}',
+        'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.9rem}th{background:#0d1b2a;color:#c9a84c;padding:8px 12px;text-align:left}',
+        'td{padding:8px 12px;border-bottom:1px solid #eee}.meta{background:#f9f7f2;padding:16px;border-radius:8px;margin:14px 0;font-size:.85rem}',
+        '.note{color:#888;font-style:italic;font-size:.85rem}pre{font-size:.75rem;background:#f5f5f5;padding:16px;border-radius:8px;overflow:auto;max-height:300px}</style>',
+        '</head><body>',
+        '<h1>Digital Relative - My Personal Data Export</h1>',
+        '<div class="meta">',
+        '<b>Export date:</b> ' + dateStr + '<br>',
+        '<b>Account:</b> ' + (user?.email || '') + '<br>',
+        '<b>Plan:</b> ' + (htmlProf.plan || '') + '<br>',
+        '<b>Member since:</b> ' + fmt(htmlProf.created_at) + '<br>',
+        '<b>Integrity (SHA-256):</b> <span style="font-family:monospace;font-size:.75rem;word-break:break-all">' + hashHex + '</span>',
+        '</div>',
+        '<p class="note">Encrypted fields (username, password, notes, secure content, address) are end-to-end encrypted and cannot be included in plaintext. Only you can decrypt them with your vault PIN.</p>',
+        '<h2>Vault Entries (' + htmlEntries.length + ')</h2>',
+        '<table><tr><th>Title</th><th>Category</th><th>Created</th><th>Expiry</th></tr>',
+        htmlEntries.map(e => '<tr><td>' + (e.title||'') + '</td><td>' + (e.category||'') + '</td><td>' + fmt(e.created_at) + '</td><td>' + (e.expiry_date||'') + '</td></tr>').join('') || '<tr><td colspan="4">None</td></tr>',
+        '</table>',
+        '<h2>Beneficiaries (' + htmlBens.length + ')</h2>',
+        '<table><tr><th>Name</th><th>Email</th><th>Relation</th><th>Status</th><th>Executor</th></tr>',
+        htmlBens.map(b => '<tr><td>' + (b.name||'') + '</td><td>' + (b.email||'') + '</td><td>' + (b.relation||'') + '</td><td>' + (b.status||'') + '</td><td>' + (b.is_executor?'Yes':'No') + '</td></tr>').join('') || '<tr><td colspan="5">None</td></tr>',
+        '</table>',
+        '<h2>Notifications (' + htmlNotifs.length + ')</h2>',
+        '<table><tr><th>Date</th><th>Title</th></tr>',
+        htmlNotifs.map(n => '<tr><td>' + fmt(n.created_at) + '</td><td>' + (n.title||'') + '</td></tr>').join('') || '<tr><td colspan="2">None</td></tr>',
+        '</table>',
+        '<h2>Device Sign-ins (' + htmlDevs.length + ')</h2>',
+        '<table><tr><th>Date</th><th>IP Address</th><th>Device</th></tr>',
+        htmlDevs.map(d => '<tr><td>' + fmt(d.created_at) + '</td><td>' + (d.ip_address||'') + '</td><td>' + (d.user_agent||'').slice(0,80) + '</td></tr>').join('') || '<tr><td colspan="3">None</td></tr>',
+        '</table>',
+        '<h2>Account Preferences</h2>',
+        '<div class="meta">',
+        '<b>Marketing opt-in:</b> ' + (htmlProf.marketing_opt_in?'Yes':'No') + '<br>',
+        '<b>Language:</b> ' + (htmlProf.preferred_language||'en') + '<br>',
+        '<b>Check-in every:</b> ' + (htmlProf.checkin_frequency_days||30) + ' days<br>',
+        '<b>Last check-in:</b> ' + fmt(htmlProf.last_checkin) + '<br>',
+        '<b>GDPR consent:</b> ' + fmt(htmlProf.gdpr_consent_at),
+        '</div>',
+        '<h2>Raw JSON Data</h2>',
+        '<pre>' + JSON.stringify({ ...exportPayload, integrity_sha256: hashHex }, null, 2).replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>',
+        '</body></html>',
+      ].join('')
+
+      const blob = new Blob([htmlReport], { type: 'text/html' })
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'digital-relative-export-' + new Date().toISOString().split('T')[0] + '.html' })
       a.click()
       toast.dismiss(id); toast.success('Data exported')
     } catch (e) { toast.dismiss(id); toast.error(e.message) }
@@ -266,6 +323,16 @@ export default function SettingsPage() {
           {saving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save changes'}
         </button>
       </div>
+
+      {/* MFA - show explanation for OAuth users */}
+      {isOAuth && (
+        <div className="fade-up-3 card-static" style={{ marginBottom: 18 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--cream)', marginBottom: 8 }}>Two-factor authentication</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.7 }}>
+            You sign in with Google, so your two-factor authentication is managed by Google. To enable or manage 2FA, visit your <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>Google account security settings</a>.
+          </p>
+        </div>
+      )}
 
       {/* MFA - only show for email users */}
       {!isOAuth && (
@@ -382,14 +449,18 @@ export default function SettingsPage() {
             </span>
           </label>
         </div>
-        {/* Push notifications */}
-        {pushSupported && (
+        {/* Push notifications - shown always, button disabled if unsupported */}
+        {(
           <div style={{ marginTop: 18 }}>
             <label className="label">Browser push notifications</label>
             <div style={{ fontSize: 11, color: 'var(--text-sub)', marginBottom: 8, lineHeight: 1.6 }}>
               Receive a reminder 3 days before your check-in is due, plus alerts for new device sign-ins. Works in Chrome, Edge, and Firefox on desktop and Android.
             </div>
-            {pushPermission === 'denied' ? (
+            {!pushSupported ? (
+              <div style={{ fontSize: 12, color: 'var(--text-sub)', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                Push notifications are not supported in this browser. Try Chrome, Edge, or Firefox on desktop or Android.
+              </div>
+            ) : pushPermission === 'denied' ? (
               <div style={{ fontSize: 12, color: 'var(--danger)', padding: '8px 12px', background: 'rgba(224,82,82,0.08)', borderRadius: 8, border: '1px solid rgba(224,82,82,0.2)' }}>
                 Blocked in browser. To enable, click the lock icon in the address bar and allow notifications for digitalrelative.co.uk.
               </div>
@@ -490,8 +561,8 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Security keys and passkeys */}
-      {!isOAuth && (
+      {/* Security keys and passkeys - available to all users */}
+      {(
         <div className="fade-up-3 card-static" style={{ marginBottom: 18 }}>
           {showWebAuthn ? (
             <WebAuthnSetup onDone={() => setShowWebAuthn(false)} onCancel={() => setShowWebAuthn(false)} />
@@ -635,9 +706,51 @@ export default function SettingsPage() {
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn-ghost" style={{ fontSize: 12 }} onClick={handleExportData}>Export all my data (JSON)</button>
-          <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => toast('Contact privacy@digitalrelative.co.uk', { icon: '✉️' })}>Contact data controller</button>
+          <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowContactModal(true)}>Contact data controller</button>
         </div>
       </div>
+
+      {/* Contact data controller modal */}
+      {showContactModal && (
+        <div className="modal-overlay" onClick={() => setShowContactModal(false)}>
+          <div className="modal" style={{ width: 480, maxWidth: '92vw' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>Contact the data controller</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.7, marginBottom: 18 }}>
+              Digital Relative is the data controller for all personal data stored in your vault. For data protection enquiries, subject access requests, or to exercise your GDPR rights, contact us at:
+            </p>
+            <div style={{ padding: '14px 16px', background: 'rgba(201,168,76,0.06)', border: '1px solid var(--gold-border)', borderRadius: 10, marginBottom: 18 }}>
+              <div style={{ fontSize: 14, color: 'var(--cream)', fontWeight: 600, marginBottom: 4 }}>privacy@digitalrelative.co.uk</div>
+              <div style={{ fontSize: 12, color: 'var(--text-sub)' }}>We aim to respond within 5 working days</div>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.7, marginBottom: 20 }}>
+              You can copy and paste the template below to make a subject access request:
+            </p>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px', fontSize: 12, color: 'var(--cream-dim)', lineHeight: 1.8, marginBottom: 18, whiteSpace: 'pre-wrap' }}>
+{`To: privacy@digitalrelative.co.uk
+Subject: Subject Access Request
+
+Dear Digital Relative,
+
+I am writing to request a copy of all personal data you hold about me under Article 15 of the UK GDPR.
+
+My account email address is: ${user?.email || '[your email address]'}
+
+Please provide all data held about me, including vault metadata, account details, device logs, and any other personal information processed by Digital Relative.
+
+Yours sincerely,
+[Your name]`}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => {
+                navigator.clipboard.writeText('privacy@digitalrelative.co.uk')
+                  .then(() => toast.success('Email copied'))
+                  .catch(() => {})
+              }}>Copy email address</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => setShowContactModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="fade-up-4 card-static" style={{ borderColor: 'rgba(224,82,82,0.25)' }}>

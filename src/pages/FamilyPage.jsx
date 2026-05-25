@@ -42,9 +42,26 @@ function DependantModal({ dependant, type, onClose, onSave }) {
   const [name, setName] = useState(dependant?.display_name || '')
   const [access, setAccess] = useState(dependant?.access_control || 'owner_only')
   const [saving, setSaving] = useState(false)
+  const draftKey = `dr_family_draft_${type?.id || 'child'}`
+
+  // Restore draft on mount (in case vault locked mid-edit)
+  // Only for new entries, not edits
+  useState(() => {
+    if (!dependant?.id) {
+      try {
+        const saved = sessionStorage.getItem(draftKey)
+        if (saved) setData(prev => ({ ...prev, ...JSON.parse(saved) }))
+      } catch {}
+    }
+  })
 
   function handleField(id, value) {
-    setData(prev => ({ ...prev, [id]: value }))
+    setData(prev => {
+      const next = { ...prev, [id]: value }
+      // Save draft to sessionStorage so data survives a vault re-lock
+      try { sessionStorage.setItem(draftKey, JSON.stringify(next)) } catch {}
+      return next
+    })
   }
 
   async function handleSave() {
@@ -52,6 +69,7 @@ function DependantModal({ dependant, type, onClose, onSave }) {
     setSaving(true)
     try {
       await onSave({ display_name: name, profile_data: data, access_control: access })
+      try { sessionStorage.removeItem(draftKey) } catch {}
       onClose()
     } catch (err) {
       toast.error(err.message || 'Failed to save')
@@ -172,6 +190,17 @@ function DependantCard({ dep, typeConfig, onEdit, onDelete }) {
   // Sensitive fields are shown masked
   const publicFields  = fields.filter(f => !f.sensitive && f.id !== 'full_name')
   const privateFields = fields.filter(f => f.sensitive)
+
+  // Check for upcoming expiry dates
+  const today = new Date()
+  const expiryWarnings = fields
+    .filter(f => f.expiryRelevant && data[f.id])
+    .map(f => {
+      const expDate = new Date(data[f.id])
+      const daysLeft = Math.ceil((expDate - today) / 86400000)
+      return { label: f.label, daysLeft, expired: daysLeft < 0 }
+    })
+    .filter(e => e.daysLeft < 60) // warn within 60 days
 
   return (
     <div className="card-static" style={{ cursor: 'pointer', borderColor: expanded ? 'var(--gold-border)' : 'var(--border)' }}

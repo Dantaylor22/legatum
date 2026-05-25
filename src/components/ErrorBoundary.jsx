@@ -13,6 +13,8 @@ export default class ErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // Log error for debugging
     console.error('Application error reference:', this.state.errorId)
+    console.error('Error:', error?.message)
+    console.error('Component:', info?.componentStack?.split('\n')[1]?.trim())
     // Sentry integration (add when you sign up at sentry.io):
     // import * as Sentry from '@sentry/react'
     // Sentry.captureException(error, { extra: { errorId: this.state.errorId } })

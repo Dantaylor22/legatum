@@ -9,7 +9,7 @@ import { validateEmail, validateName, sanitiseText } from '../lib/validation'
 const ACCESS_LEVELS = ['Full access', 'Read only', 'Specific categories only']
 
 function BenModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ name: '', relation: '', email: '', access_level: 'Full access', access_requirement: 'death_certificate', group_name: '' })
+  const [form, setForm] = useState({ name: '', relation: '', email: '', access_level: 'Full access', access_requirement: 'trust_only', group_name: '' })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -147,7 +147,7 @@ export default function BeneficiariesPage({ onNav }) {
   async function handleAdd(form) {
     await addBeneficiary(form)
     toast.success('Invite sent to ' + form.email)
-    supabase.from('audit_log').insert({ action: 'beneficiary_added' }).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'beneficiary_added', user_id: form.user_id }).then(() => {}).then(() => {}).catch(() => {})
   }
 
   async function handleToggleExecutor(id, currentIsExecutor) {
@@ -179,7 +179,7 @@ export default function BeneficiariesPage({ onNav }) {
     if (!confirm(`Remove ${name} as a beneficiary?`)) return
     await removeBeneficiary(id)
     toast.success('Beneficiary removed')
-    supabase.from('audit_log').insert({ action: 'beneficiary_removed' }).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'beneficiary_removed' }).then(() => {}).then(() => {}).catch(() => {})
   }
 
   return (
@@ -258,7 +258,7 @@ export default function BeneficiariesPage({ onNav }) {
                   )}
                   <div style={{ fontSize: 12, color: 'var(--text-sub)', marginTop: 2 }}>{b.access_level}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 2 }}>
-                    {b.access_requirement === 'id_only' ? '🪪 ID only' : b.access_requirement === 'trust_only' ? '🤝 Trust only' : '📋 Death certificate required'}
+                    {b.access_requirement === 'id_only' ? '🪪 ID only' : (b.access_requirement === 'trust_only' || b.access_requirement === 'none') ? '🤝 Trust only' : '📋 Death certificate required'}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

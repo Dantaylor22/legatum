@@ -49,7 +49,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     startAbsoluteSessionTimer()
     // Listen for user activity
-    const events = ['mousedown', 'keydown', 'touchstart', 'scroll']
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'visibilitychange']
     events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }))
     resetInactivityTimer()
     return () => {
@@ -73,7 +73,9 @@ export function AuthProvider({ children }) {
 
       // Always clear the session key on a new sign-in so the PIN prompt shows
       // This covers Google OAuth redirects where the module may not have reloaded
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      // Only clear session key on actual sign-in, NOT on token refresh
+      // TOKEN_REFRESHED fires silently every hour and should not lock the vault
+      if (event === 'SIGNED_IN') {
         clearSessionKey()
       }
 
@@ -132,7 +134,7 @@ export function AuthProvider({ children }) {
   async function signIn({ email, password }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    supabase.from('audit_log').insert({ action: 'signed_in', metadata: { method: 'email' } }).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'signed_in', metadata: { method: 'email' } }).then(() => {}).catch(() => {})
     // Do NOT derive a key from the password here.
     // The vault key is derived from the vault PIN (not the login password).
     // VaultPinEntry will handle key derivation using PIN + randomSalt from profile.

@@ -1,37 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 
-// GetAddress.io UK address lookup
-// API key stored client-side (public key - read-only, rate-limited by domain in GetAddress.io dashboard)
-const GETADDRESS_API_KEY = import.meta.env.VITE_GETADDRESS_API_KEY || ''
+// UK Postcode lookup using postcodes.io - free, open data, no API key required
+// Data sourced from ONS/OS Open Data - legally clean, no Royal Mail licensing issues
+// https://postcodes.io
 
-// Validate postcode format before hitting the API
 function isValidPostcode(pc) {
   return /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(pc.trim())
 }
 
-// Format a GetAddress result line array into a clean single string
-function formatAddress(result) {
-  const parts = [
-    result.line_1, result.line_2, result.line_3, result.line_4,
-    result.locality, result.town_or_city, result.county,
-  ].filter(Boolean)
-  return parts.join(', ')
-}
-
-export default function AddressLookup({ value, onChange, placeholder = 'Start typing a postcode…' }) {
-  const [postcode, setPostcode]     = useState('')
-  const [results, setResults]       = useState([])
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [mode, setMode]             = useState('lookup') // lookup | manual
-  const dropdownRef                 = useRef(null)
+export default function AddressLookup({ value, onChange, placeholder = 'Start typing a postcode...' }) {
+  const [postcode, setPostcode]         = useState('')
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
+  const [mode, setMode]                 = useState('lookup') // lookup | manual
+  const [postcodeFound, setPostcodeFound] = useState(false)
+  const dropdownRef                     = useRef(null)
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClick(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowDropdown(false)
+        setPostcodeFound(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -39,52 +28,59 @@ export default function AddressLookup({ value, onChange, placeholder = 'Start ty
   }, [])
 
   async function handleLookup() {
-    const pc = postcode.trim().toUpperCase()
+    const pc = postcode.trim().toUpperCase().replace(/\s+/g, '')
     if (!isValidPostcode(pc)) {
       setError('Please enter a valid UK postcode')
       return
     }
-    if (!GETADDRESS_API_KEY) {
-      setError('Address lookup not configured')
-      setMode('manual')
-      return
-    }
     setLoading(true)
     setError('')
-    setResults([])
+    setPostcodeFound(false)
     try {
       const res = await fetch(
-        `https://api.getaddress.io/find/${encodeURIComponent(pc)}?api-key=${GETADDRESS_API_KEY}&expand=true`,
+        `https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`,
         { signal: AbortSignal.timeout(8000) }
       )
-      if (res.status === 404) { setError('No addresses found for this postcode'); setLoading(false); return }
-      if (!res.ok) { setError('Address lookup failed - enter manually'); setLoading(false); return }
+      if (res.status === 404) {
+        setError('Postcode not found - please enter address manually')
+        setLoading(false)
+        return
+      }
+      if (!res.ok) {
+        setError('Lookup failed - please enter address manually')
+        setLoading(false)
+        return
+      }
       const data = await res.json()
-      const addresses = (data.addresses || []).map(a => formatAddress(a) + ', ' + pc)
-      setResults(addresses)
-      setShowDropdown(true)
+      const result = data.result
+      if (!result) { setError('No result found'); setLoading(false); return }
+
+      // Build a partial address from postcode data
+      // postcodes.io gives us: admin_district (council), parish, region, postcode
+      // Not full street addresses - those require paid data. We fill postcode + area.
+      const area = [result.parish !== result.admin_district ? result.parish : null,
+                    result.admin_district, result.region]
+        .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+
+      const formattedPostcode = result.postcode
+      onChange(formattedPostcode + (area ? ', ' + area : ''))
+      setPostcodeFound(true)
+      setPostcode('')
     } catch {
-      setError('Could not reach address lookup - enter manually')
+      setError('Could not reach postcode lookup - please enter address manually')
     } finally {
       setLoading(false)
     }
-  }
-
-  function handleSelect(address) {
-    onChange(address)
-    setShowDropdown(false)
-    setPostcode('')
-    setResults([])
   }
 
   if (mode === 'manual') {
     return (
       <div>
         <textarea className="input" style={{ minHeight: 72, resize: 'vertical' }}
-          placeholder="Enter full address"
+          placeholder="Enter full address (e.g. 42 Example Road, London, SW1A 1AA)"
           value={value}
           onChange={e => onChange(e.target.value)} />
-        <button type="button" onClick={() => setMode('lookup')} style={{
+        <button type="button" onClick={() => { setMode('lookup'); setError('') }} style={{
           marginTop: 4, background: 'transparent', border: 'none',
           color: 'var(--gold)', fontSize: 12, cursor: 'pointer',
           fontFamily: 'var(--sans)', padding: 0,
@@ -106,7 +102,7 @@ export default function AddressLookup({ value, onChange, placeholder = 'Start ty
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8,
         }}>
           <span style={{ lineHeight: 1.5 }}>{value}</span>
-          <button type="button" onClick={() => onChange('')} style={{
+          <button type="button" onClick={() => { onChange(''); setPostcodeFound(false) }} style={{
             flexShrink: 0, background: 'transparent', border: 'none',
             color: 'var(--text-sub)', fontSize: 16, cursor: 'pointer',
             lineHeight: 1, padding: '0 2px',
@@ -120,7 +116,7 @@ export default function AddressLookup({ value, onChange, placeholder = 'Start ty
           className="input"
           placeholder={placeholder}
           value={postcode}
-          onChange={e => { setPostcode(e.target.value); setError('') }}
+          onChange={e => { setPostcode(e.target.value); setError(''); setPostcodeFound(false) }}
           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleLookup())}
           style={{ flex: 1, textTransform: 'uppercase' }}
           maxLength={8}
@@ -132,45 +128,28 @@ export default function AddressLookup({ value, onChange, placeholder = 'Start ty
           opacity: loading || !postcode.trim() ? 0.6 : 1,
           fontFamily: 'var(--sans)', whiteSpace: 'nowrap', flexShrink: 0,
         }}>
-          {loading ? '...' : 'Find address'}
+          {loading ? '...' : 'Find'}
         </button>
       </div>
 
       {error && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{error}</div>}
 
-      {/* Results dropdown */}
-      {showDropdown && results.length > 0 && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
-          background: 'var(--navy-lt)', border: '1px solid var(--border-md)',
-          borderRadius: 'var(--r)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          maxHeight: 260, overflowY: 'auto', marginTop: 4,
-        }}>
-          {results.map((addr, i) => (
-            <button key={i} type="button" onClick={() => handleSelect(addr)} style={{
-              display: 'block', width: '100%', textAlign: 'left',
-              padding: '10px 14px', background: 'transparent',
-              border: 'none', borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none',
-              color: 'var(--cream-dim)', fontSize: 13, cursor: 'pointer',
-              fontFamily: 'var(--sans)', lineHeight: 1.5,
-            }}
-            onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-            onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-            >
-              {addr}
-            </button>
-          ))}
+      {postcodeFound && (
+        <div style={{ fontSize: 12, color: 'var(--success)', marginTop: 4 }}>
+          Postcode found. To add a full street address, click "Enter address manually".
         </div>
       )}
 
-      {/* Manual entry link */}
-      <button type="button" onClick={() => setMode('manual')} style={{
-        marginTop: 4, background: 'transparent', border: 'none',
-        color: 'var(--text-sub)', fontSize: 12, cursor: 'pointer',
-        fontFamily: 'var(--sans)', padding: 0,
-      }}>
-        Enter address manually instead
-      </button>
+      <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-sub)', lineHeight: 1.5 }}>
+        Postcode lookup fills the area automatically.{' '}
+        <button type="button" onClick={() => { setMode('manual'); setError('') }} style={{
+          background: 'transparent', border: 'none',
+          color: 'var(--text-sub)', fontSize: 11, cursor: 'pointer',
+          fontFamily: 'var(--sans)', padding: 0, textDecoration: 'underline',
+        }}>
+          Enter full address manually instead
+        </button>
+      </div>
     </div>
   )
 }

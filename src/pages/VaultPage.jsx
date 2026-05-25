@@ -497,7 +497,7 @@ export default function VaultPage({ onNav }) {
   async function handleSave(form) {
     if (modal === 'new') {
       await addEntry(form)
-      supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_created', metadata: { category: form.category } }).catch(() => {})
+      supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_created', metadata: { category: form.category } }).then(() => {}).catch(() => {})
     } else {
       // Save current version before overwriting (keep max 3)
       const current = entries.find(e => e.id === modal.id)
@@ -520,14 +520,14 @@ export default function VaultPage({ onNav }) {
         }
       }
       await updateEntry(modal.id, form)
-      supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_updated', metadata: { category: form.category } }).catch(() => {})
+      supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_updated', metadata: { category: form.category } }).then(() => {}).catch(() => {})
     }
     toast.success(modal === 'new' ? 'Entry added' : 'Entry updated')
   }
 
   async function handleDelete(id) {
     await deleteEntry(id)
-    supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_deleted' }).catch(() => {})
+    supabase.from('audit_log').insert({ user_id: user.id, action: 'vault_entry_deleted' }).then(() => {}).catch(() => {})
     toast.success('Entry deleted')
   }
 

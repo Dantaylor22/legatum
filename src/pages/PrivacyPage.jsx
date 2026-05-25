@@ -67,7 +67,7 @@ export default function PrivacyPage() {
           {[
             { name: 'Supabase (London)', location: 'UK', purpose: 'Database, authentication, file storage. AWS eu-west-2, physically in the UK. All vault data.' },
             { name: 'Onfido', location: 'UK', purpose: 'Identity verification and death certificate processing. UK company, London HQ.' },
-            { name: 'GetAddress.io', location: 'UK', purpose: 'UK postcode lookup. UK company, UK servers. Only a postcode is sent - no personal data.' },
+            { name: 'postcodes.io', location: 'UK', purpose: 'UK postcode lookup. UK company, UK servers. Only a postcode is sent - no personal data.' },
             { name: 'Stripe', location: 'UK', purpose: 'Payment processing. Stripe Payments UK Ltd is authorised by the FCA. No card data passes through our servers.' },
             { name: 'Resend', location: 'UK/EU', purpose: 'Transactional email delivery. UK entity. Emails contain your name and notification content but never vault data.' },
             { name: 'Cloudflare', location: 'Global CDN', purpose: 'Serves the application\'s static files (code, images). No personal data. Location information for security alerts is derived from Cloudflare\'s own headers - no data is sent to Cloudflare by us.' },

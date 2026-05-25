@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { deriveKey, setSessionKey, encrypt } from '../lib/crypto'
+import { deriveKey, setSessionKey, getSessionKey, encrypt } from '../lib/crypto'
 import { validatePin, formatPin } from '../lib/vaultPin'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -41,7 +41,10 @@ export default function DuressPinSetup({ onComplete, onCancel }) {
       const salt    = profile.encryption_salt
       const dKey    = await deriveKey(pin, user.id + '_duress', salt)
 
-      // Store key temporarily to encrypt decoy entries
+      // Save real session key so we can restore it after
+      const realKey = getSessionKey()
+
+      // Store duress key temporarily to encrypt decoy entries
       setSessionKey(dKey)
 
       // Encrypt and save decoy entries
@@ -61,9 +64,10 @@ export default function DuressPinSetup({ onComplete, onCancel }) {
       // Encrypt a test value with the duress key for verification
       const verification = await encrypt('dr_duress_ok')
 
-      // Restore real session key (not duress key)
-      const { clearSessionKey } = await import('../lib/crypto')
-      clearSessionKey()
+      // Restore real session key so vault doesn't re-lock
+      if (realKey) {
+        setSessionKey(realKey)
+      }
 
       await updateProfile({ duress_pin_set: true, duress_key_verification: verification })
       toast.success('Duress PIN set')

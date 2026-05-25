@@ -123,7 +123,7 @@ export default function Dashboard({ onNav }) {
         checkin_frequency_days: profile?.checkin_frequency_days || 30,
       })
       toast.success('Check-in recorded')
-      supabase.from('audit_log').insert({ action: 'checked_in' }).catch(() => {})
+      supabase.from('audit_log').insert({ action: 'checked_in' }).then(() => {}).catch(() => {})
     } catch (e) { toast.error(e.message) }
     finally { setCheckingIn(false) }
   }
