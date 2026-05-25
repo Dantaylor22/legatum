@@ -23,7 +23,7 @@ const COMMON_RELATIONS = [
 
 const ACCESS_LEVELS = ['Full access', 'Read only', 'Specific categories only']
 
-function BenModal({ onClose, onSave }) {
+function BenModal({ onClose, onSave, beneficiaries = [] }) {
   const [form, setForm] = useState({ name: '', relation: '', email: '', access_level: 'Full access', access_requirement: 'trust_only', group_name: '' })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -380,7 +380,7 @@ export default function BeneficiariesPage({ onNav }) {
         )}
       </div>
 
-      {showModal && <BenModal onClose={() => setShowModal(false)} onSave={handleAdd} />}
+      {showModal && <BenModal onClose={() => setShowModal(false)} onSave={handleAdd} beneficiaries={beneficiaries} />}
     </div>
   )
 }

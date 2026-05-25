@@ -475,6 +475,7 @@ export default function VaultPage({ onNav }) {
   const [showExpired, setShowExpired] = useState(false)
   const [revealEntry, setRevealEntry] = useState(null)
   const [shareEntry, setShareEntry]   = useState(null)
+  const [showImport, setShowImport]   = useState(false)
 
   const planId  = profile?.plan || 'free'
   const plan    = PLANS[planId] || PLANS.free
