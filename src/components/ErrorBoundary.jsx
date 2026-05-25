@@ -3,11 +3,11 @@ import { Component } from 'react'
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, errorId: null }
+    this.state = { hasError: false, errorId: null, errorMsg: null }
   }
 
   static getDerivedStateFromError() {
-    return { hasError: true, errorId: `err_${Date.now()}` }
+    return { hasError: true, errorId: `err_${Date.now()}`, errorMsg: null }
   }
 
   componentDidCatch(error, info) {
@@ -15,6 +15,7 @@ export default class ErrorBoundary extends Component {
     console.error('Application error reference:', this.state.errorId)
     console.error('Error:', error?.message)
     console.error('Component:', info?.componentStack?.split('\n')[1]?.trim())
+    this.setState({ errorMsg: error?.message || 'Unknown error' })
     // Sentry integration (add when you sign up at sentry.io):
     // import * as Sentry from '@sentry/react'
     // Sentry.captureException(error, { extra: { errorId: this.state.errorId } })
@@ -42,6 +43,11 @@ export default class ErrorBoundary extends Component {
             <div style={{ fontSize: 13, color: '#7a93aa', lineHeight: 1.7, marginBottom: 24 }}>
               An unexpected error occurred. Your vault data is safe - this is a display error only.
               Reference: <code style={{ color: '#c9a84c', fontSize: 11 }}>{this.state.errorId}</code>
+              {this.state.errorMsg && (
+                <div style={{ marginTop: 8, fontSize: 11, color: '#e07a52', fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                  {this.state.errorMsg}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
