@@ -86,7 +86,7 @@ serve(async (req) => {
       // group_name intentionally excluded - owner-only organisational label, must never be visible to beneficiaries
       .select('id, user_id, name, email, relation, access_level, access_requirement, status, id_verified_at, is_executor')
       .or(`invite_token.eq.${token},emergency_access_token.eq.${token}`)
-      .in('status', ['email_confirmed', 'id_verified', 'access_granted'])
+      .in('status', ['invited', 'email_confirmed', 'id_verified', 'access_granted', 'liveness_required'])
       .single()
 
     if (benError || !beneficiary) {
@@ -102,6 +102,31 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Access link has expired' }), {
         status: 401, headers: { ...hdrs, 'Content-Type': 'application/json' },
       })
+    }
+
+    // For 'invited' beneficiaries: they need to confirm their invite first
+    // Return a minimal response so the portal shows the confirmation screen
+    if (beneficiary.status === 'invited') {
+      // Mark as email_confirmed (they clicked the link - their email is verified)
+      await supabase.from('beneficiaries')
+        .update({ status: 'email_confirmed', email_confirmed_at: new Date().toISOString() })
+        .eq('id', beneficiary.id)
+
+      return new Response(JSON.stringify({
+        beneficiary: {
+          id:               beneficiary.id,
+          name:             beneficiary.name,
+          email:            beneficiary.email,
+          status:           'email_confirmed',
+          access_level:     beneficiary.access_level,
+          access_requirement: beneficiary.access_requirement,
+          is_executor:      beneficiary.is_executor,
+        },
+        guide:        null,
+        vaultEntries: [],
+        isTier2:      false,
+        justConfirmed: true,  // tells portal to show welcome/confirmation screen
+      }), { headers: { ...hdrs, 'Content-Type': 'application/json' } })
     }
 
     const isTier2      = !!beneficiary.id_verified_at

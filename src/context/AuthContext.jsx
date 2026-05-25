@@ -13,6 +13,7 @@ const SESSION_START_KEY     = 'dr_session_start'
 export function AuthProvider({ children }) {
   const [user, setUser]           = useState(null)
   const [profile, setProfile]     = useState(null)
+  const hadUser = useRef(false)  // track whether we've already seen a logged-in user
   const [loading, setLoading]     = useState(true)
   const [transitioning, setTransitioning] = useState(false)
   const inactivityTimer               = useRef(null)
@@ -73,14 +74,18 @@ export function AuthProvider({ children }) {
 
       // Always clear the session key on a new sign-in so the PIN prompt shows
       // This covers Google OAuth redirects where the module may not have reloaded
-      // Only clear session key on actual sign-in, NOT on token refresh
-      // TOKEN_REFRESHED fires silently every hour and should not lock the vault
-      if (event === 'SIGNED_IN') {
+      // Only clear session key on actual NEW sign-in, not on session restoration
+      // Supabase fires SIGNED_IN on tab focus/restore - we must not lock the vault then
+      // A genuine new sign-in only happens when hadUser was false (no prior session)
+      if (event === 'SIGNED_IN' && !hadUser.current) {
         clearSessionKey()
       }
 
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
+      const nextUser = session?.user ?? null
+      if (nextUser) hadUser.current = true
+      else hadUser.current = false
+      setUser(nextUser)
+      if (nextUser) fetchProfile(nextUser.id)
       else {
         setProfile(null)
         clearSessionKey()

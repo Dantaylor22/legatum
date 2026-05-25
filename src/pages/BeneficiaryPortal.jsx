@@ -149,6 +149,7 @@ function TreeLogo({ size = 48 }) {
 const STAGES = {
   loading:      'loading',
   invalid:      'invalid',
+  confirmed:    'confirmed',  // just accepted invite for first time
   tier1:        'tier1',
   tier2:        'tier2',
 }
@@ -225,9 +226,15 @@ export default function BeneficiaryPortal() {
 
     if (error || !data || data.error) { setStage(STAGES.invalid); return }
 
-    const { beneficiary, guide, vaultEntries, isTier2 } = data
+    const { beneficiary, guide, vaultEntries, isTier2, justConfirmed } = data
 
     setBeneficiary(beneficiary)
+
+    // Show welcome screen if they just clicked the invite link for the first time
+    if (justConfirmed) {
+      setStage(STAGES.confirmed)
+      return
+    }
     if (guide && typeof guide === 'object' && 'sections' in guide) {
       setOwnerGuide(guide.sections)
       setPersonalMessage(guide.personalMessage || '')
@@ -338,6 +345,32 @@ export default function BeneficiaryPortal() {
             onClick={() => window.location.reload()}>
             Return to start
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (stage === STAGES.confirmed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--navy)', padding: '20px' }}>
+        <div style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: 56, marginBottom: 20 }}>✅</div>
+          <h1 style={{ fontFamily: 'var(--serif)', fontSize: 28, color: 'var(--cream)', marginBottom: 12, fontWeight: 400 }}>
+            Invitation accepted
+          </h1>
+          <p style={{ fontSize: 15, color: 'var(--text-sub)', lineHeight: 1.8, marginBottom: 8 }}>
+            You are now registered as a trusted beneficiary for {beneficiary?.name ? `${beneficiary.name}'s` : 'this'} Digital Relative vault.
+          </p>
+          <p style={{ fontSize: 14, color: 'var(--text-sub)', lineHeight: 1.7, marginBottom: 28 }}>
+            You will not be able to access the vault contents unless the vault owner passes away or becomes incapacitated and the dead man's switch triggers. When that happens, you will receive an email with a new link.
+          </p>
+          <div style={{ padding: '16px 20px', background: 'rgba(201,168,76,0.08)', border: '1px solid var(--gold-border)', borderRadius: 10, marginBottom: 28, textAlign: 'left' }}>
+            <div style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 600, marginBottom: 6 }}>What happens next</div>
+            <div style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.7 }}>
+              The vault owner receives a regular check-in reminder. If they stop checking in, the system automatically notifies you with access instructions. No action is needed from you right now.
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-sub)' }}>You can safely close this page.</p>
         </div>
       </div>
     )
