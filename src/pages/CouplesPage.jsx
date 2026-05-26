@@ -497,7 +497,7 @@ export default function CouplesPage({ onNav }) {
         <div className="fade-up-2 card-static" style={{ borderColor: 'var(--gold-border)', background: 'var(--gold-dim)', marginBottom: 24 }}>
           <h3 style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--gold)', marginBottom: 8 }}>Partner vault invitation</h3>
           <p style={{ fontSize: 13, color: 'var(--cream-dim)', marginBottom: 16, lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--text)' }}>{link.requester?.full_name || 'Your partner'}</strong> has invited you to link your vaults. You'll each keep your own private vault. Sharing is optional and reversible at any time.
+            <strong style={{ color: 'var(--text)' }}>{partner?.full_name || 'Your partner'}</strong> has invited you to link your vaults. You'll each keep your own private vault. Sharing is optional and reversible at any time.
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-primary" onClick={async () => { await acceptLink(link.id); toast.success('Partner link accepted - your vaults are now linked') }}>
@@ -540,7 +540,7 @@ export default function CouplesPage({ onNav }) {
               <div style={{ fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 12 }}>
                 {isRequester
                   ? `You ended your Couples link. After ${new Date(link.separation_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached. Review the entries you created and choose which to keep in your private vault.`
-                  : `${link.requester?.full_name || 'Your partner'} ended the Couples link. On ${new Date(link.separation_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached and you'll be moved to the Free plan. Review the entries you created and choose which to keep in your private vault.`}
+                  : `${partner?.full_name || 'Your partner'} ended the Couples link. On ${new Date(link.separation_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached and you'll be moved to the Free plan. Review the entries you created and choose which to keep in your private vault.`}
               </div>
               <button className="btn-primary" style={{ fontSize: 12, padding: '8px 16px' }} onClick={() => setShowReview(true)}>
                 Review shared entries

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import toast from 'react-hot-toast'
+import CookieBanner from './components/CookieBanner'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useVaultLock } from './hooks/useVaultLock'
 import { pinIsSet } from './lib/vaultPin'
@@ -200,14 +201,17 @@ function AppInner() {
   }
 
   if (!user) {
-    if (showAuth) return <AuthPage onBack={() => setShowAuth(false)} selectedPlan={selectedPlan} onClearPlan={() => setSelectedPlan(null)} />
+    if (showAuth) return <><AuthPage onBack={() => setShowAuth(false)} selectedPlan={selectedPlan} onClearPlan={() => setSelectedPlan(null)} /><CookieBanner /></>
     const params = new URLSearchParams(window.location.search)
-    if (params.get('signup') || params.get('login')) return <AuthPage />
-    return <LandingPage
-      onLogin={() => { setSelectedPlan(null); setShowAuth(true) }}
-      onSignup={() => { setSelectedPlan(null); setShowAuth(true) }}
-      onPlan={(planId, priceId) => { setSelectedPlan({ planId, priceId }); setShowAuth(true) }}
-    />
+    if (params.get('signup') || params.get('login')) return <><AuthPage /><CookieBanner /></>
+    return <>
+      <LandingPage
+        onLogin={() => { setSelectedPlan(null); setShowAuth(true) }}
+        onSignup={() => { setSelectedPlan(null); setShowAuth(true) }}
+        onPlan={(planId, priceId) => { setSelectedPlan({ planId, priceId }); setShowAuth(true) }}
+      />
+      <CookieBanner />
+    </>
   }
 
   if (profile && !pinIsSet(profile)) {

@@ -11,21 +11,32 @@ export function usePartner() {
   const fetch = useCallback(async () => {
     if (!user) return
     setLoading(true)
-    // Include separation_pending so the grace-period UI (banner + review modal)
-    // can render. Without this, separating links are invisible to the client
-    // and CouplesPage falls through every condition with nothing on screen.
-    const { data } = await supabase
+    // Two-step fetch: link row from partner_links (no FK joins into profiles
+    // because partners no longer have broad SELECT on each other's profile —
+    // see supabase/migrations/partner-profile-view.sql). Partner identity
+    // comes from partner_summary, which exposes only id/full_name/plan.
+    const { data: linkRow } = await supabase
       .from('partner_links')
-      .select('*, requester:requester_id(id, full_name, plan), partner:partner_id(id, full_name, plan)')
+      .select('*')
       .or(`requester_id.eq.${user.id},partner_id.eq.${user.id}`)
       .in('status', ['pending', 'accepted', 'separation_pending'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (data) {
-      setLink(data)
-      setPartner(data.requester_id === user.id ? data.partner : data.requester)
+    if (linkRow) {
+      const partnerId = linkRow.requester_id === user.id ? linkRow.partner_id : linkRow.requester_id
+      let partnerProfile = null
+      if (partnerId) {
+        const { data: p } = await supabase
+          .from('partner_summary')
+          .select('id, full_name, plan')
+          .eq('id', partnerId)
+          .maybeSingle()
+        partnerProfile = p
+      }
+      setLink(linkRow)
+      setPartner(partnerProfile)
     } else {
       setLink(null)
       setPartner(null)

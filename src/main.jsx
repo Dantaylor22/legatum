@@ -11,14 +11,15 @@ createRoot(document.getElementById('root')).render(
   </ErrorBoundary>,
 )
 
-// ── Crisp live chat (optional) ──────────────────────────────────────────────
-// Loads only on public pages (landing, pricing, blog) - never when vault is unlocked
-// If no VITE_CRISP_WEBSITE_ID is set, nothing loads
+// ── Crisp live chat — gated on cookie consent ───────────────────────────────
+// Crisp sets third-party cookies, so under PECR / UK GDPR we can only load it
+// after the user accepts non-essential cookies. The CookieBanner component
+// stores consent in localStorage as 'dr_cookie_consent' = 'accepted'.
+// We also defer to the post-React-mount tick so the banner can render first.
 const CRISP_ID = import.meta.env.VITE_CRISP_WEBSITE_ID
-if (CRISP_ID) {
-  // Only load on public pages - not inside the authenticated app
-  // The app router sets document.body.dataset.vaultOpen when vault is unlocked
-  // Crisp is hidden when vault is open to prevent third-party JS touching vault memory
+
+function loadCrisp() {
+  if (!CRISP_ID || window.$crisp) return
   window.$crisp = []
   window.CRISP_WEBSITE_ID = CRISP_ID
   const s = document.createElement('script')
@@ -26,7 +27,8 @@ if (CRISP_ID) {
   s.async = true
   document.head.appendChild(s)
 
-  // Hide Crisp widget while vault is unlocked (belt-and-suspenders)
+  // Hide Crisp widget while vault is unlocked (belt-and-suspenders against
+  // third-party JS touching memory adjacent to the decrypted vault state).
   const observer = new MutationObserver(() => {
     const vaultOpen = document.body?.dataset?.vaultOpen === 'true'
     if (window.$crisp?.push) {
@@ -34,6 +36,17 @@ if (CRISP_ID) {
     }
   })
   observer.observe(document.body || document.documentElement, { attributes: true, attributeFilter: ['data-vault-open'] })
+}
+
+if (CRISP_ID) {
+  let consent = null
+  try { consent = localStorage.getItem('dr_cookie_consent') } catch {}
+  if (consent === 'accepted') {
+    loadCrisp()
+  } else {
+    // Listen for the cookie banner accepting consent later in the session.
+    window.addEventListener('dr_cookie_accepted', loadCrisp, { once: true })
+  }
 }
 
 // ── Service worker registration ──────────────────────────────────────────────

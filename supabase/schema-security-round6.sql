@@ -434,16 +434,28 @@ alter table public.vault_entries
 -- See supabase/migrations/partners-view-profile.sql for context.
 -- ══════════════════════════════════════════════════════════════
 
+-- ══════════════════════════════════════════════════════════════
+-- profiles — restricted-column view for partner reads
+-- See supabase/migrations/partner-profile-view.sql for context.
+-- This SUPERSEDES the earlier "Partners can view each other's
+-- profile" policy on profiles, which exposed the whole row.
+-- ══════════════════════════════════════════════════════════════
+
 drop policy if exists "Partners can view each other's profile" on public.profiles;
-create policy "Partners can view each other's profile" on public.profiles
-  for select using (
-    exists (
-      select 1 from public.partner_links
-      where status in ('accepted', 'separation_pending')
-        and (
-          (requester_id = auth.uid() and partner_id = profiles.id)
-          or (partner_id = auth.uid() and requester_id = profiles.id)
-        )
-    )
+
+create or replace view public.partner_summary
+with (security_invoker = false) as
+  select p.id, p.full_name, p.plan
+  from public.profiles p
+  where exists (
+    select 1 from public.partner_links pl
+    where pl.status in ('accepted', 'separation_pending')
+      and (
+        (pl.requester_id = auth.uid() and pl.partner_id = p.id)
+        or (pl.partner_id = auth.uid() and pl.requester_id = p.id)
+      )
   );
+
+grant select on public.partner_summary to authenticated;
+revoke all  on public.partner_summary from anon;
 

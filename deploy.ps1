@@ -93,8 +93,17 @@ if (-not $changedFunctions) {
 }
 
 # Step 6: Create source zip (for audit / backup)
+# Picks first existing folder from this preference list, falls back to repo root.
 Write-Host "Step 6/6: Creating source zip..." -ForegroundColor Yellow
-$zipPath = Join-Path $env:USERPROFILE "Desktop\legatum-$(Get-Date -Format 'yyyy-MM-dd').zip"
+$zipCandidates = @(
+    (Join-Path $env:USERPROFILE 'Desktop'),
+    (Join-Path $env:USERPROFILE 'OneDrive\Desktop'),
+    (Join-Path $env:USERPROFILE 'Documents'),
+    $env:USERPROFILE,
+    '.'
+)
+$zipDir = $zipCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$zipPath = Join-Path $zipDir "legatum-$(Get-Date -Format 'yyyy-MM-dd').zip"
 $excludes = @('.git', 'node_modules', 'dist')
 $items = Get-ChildItem -Path . | Where-Object { $_.Name -notin $excludes }
 try {

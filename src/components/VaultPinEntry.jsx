@@ -134,15 +134,16 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
       if (trustDevice) {
         await saveTrustedPin(pin, user.id, user.email)
       } else {
-        // Try to upgrade existing legacy trust to PRF (Touch ID / Windows Hello).
-        // Fire-and-forget so unlock isn't blocked by the biometric prompt, but
-        // toast the outcome so the user gets visible feedback.
-        migrateTrustedDevice(pin, user.id, user.email)
-          .then(result => {
-            if (result === 'migrated')    toast.success('Upgraded to biometric unlock')
-            if (result === 'unsupported') toast('Biometric unlock not available on this device', { icon: 'ℹ️' })
-          })
-          .catch(() => {})
+        // Try to upgrade existing legacy trust to PRF. We AWAIT here (not
+        // fire-and-forget) so the credentials.create() call is still inside
+        // the original user-gesture context — Safari rejects WebAuthn calls
+        // with NotAllowedError if too much time passes between gesture and
+        // create(). migrateTrustedDevice is a no-op (returns 'skipped'
+        // immediately) when there's nothing to migrate, so users without
+        // legacy trust see no extra latency.
+        const result = await migrateTrustedDevice(pin, user.id, user.email).catch(() => null)
+        if (result === 'migrated')    toast.success('Upgraded to biometric unlock')
+        if (result === 'unsupported') toast('Biometric unlock not available on this device', { icon: 'ℹ️' })
       }
       toast.success('Vault unlocked')
       onUnlocked()

@@ -61,6 +61,38 @@ async function verifyStripeSignature(
   }
 }
 
+// If userId is the active couples_payer_id on an accepted partner_link,
+// transition that link to the 14-day separation grace period and notify
+// the other partner. Called when the payer's Stripe subscription drops
+// off Couples (changed plan or cancelled). Mirrors handle-separation.
+async function startSeparationIfPayer(supabase: any, userId: string) {
+  const { data: link } = await supabase
+    .from('partner_links')
+    .select('id, requester_id, partner_id, status, separation_deadline')
+    .eq('couples_payer_id', userId)
+    .eq('status', 'accepted')
+    .maybeSingle()
+  if (!link) return
+
+  const deadline = new Date(Date.now() + 14 * 86400000)
+  await supabase.from('partner_links').update({
+    status:              'separation_pending',
+    separation_deadline: deadline.toISOString(),
+    separated_at:        new Date().toISOString(),
+  }).eq('id', link.id)
+
+  const otherId = link.requester_id === userId ? link.partner_id : link.requester_id
+  if (otherId) {
+    await supabase.from('notifications').insert([{
+      user_id:    otherId,
+      type:       'separation_pending',
+      title:      'Your Couples plan is ending',
+      message:    `Your partner's Couples subscription has changed. You have 14 days to review the shared vault and choose which entries you created should move to your private vault. After ${deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached and you'll be moved to the Free plan.`,
+      action_url: '/?page=couples',
+    }]).catch(() => {})
+  }
+}
+
 serve(async (req) => {
   // FIX MD-1: Create supabase client per-request, not at module level
   const supabase = createClient(
@@ -141,11 +173,12 @@ async function handleEvent(event: any, supabase: any) {
       const renewal = new Date((sub?.current_period_end ?? 0) * 1000).toISOString()
 
       const { data: profile } = await supabase
-        .from('profiles').select('id').eq('id', userId).single()
+        .from('profiles').select('id, plan').eq('id', userId).single()
       if (!profile) {
         console.error('User not found:', userId)
         return
       }
+      const oldPlan = profile.plan
 
       const { error } = await supabase.from('profiles').update({
         plan,
@@ -154,6 +187,13 @@ async function handleEvent(event: any, supabase: any) {
       }).eq('id', userId)
 
       if (error) console.error('Profile update failed:', error.message)
+
+      // If the user dropped off Couples while they're the active payer on
+      // a partner link, kick off the 14-day separation grace period for
+      // their partner. Matches the behaviour of the in-app Unlink button.
+      if (oldPlan === 'couples' && plan !== 'couples') {
+        await startSeparationIfPayer(supabase, userId)
+      }
       break
     }
 
@@ -162,12 +202,20 @@ async function handleEvent(event: any, supabase: any) {
       const userId = sub?.metadata?.supabase_user_id ?? ''
       if (!UUID_RE.test(userId)) return
 
+      const { data: profile } = await supabase
+        .from('profiles').select('plan').eq('id', userId).single()
+      const oldPlan = profile?.plan
+
       await supabase.from('profiles').update({
         plan:                   'free',
         plan_renewal:           null,
         stripe_subscription_id: null,
       }).eq('id', userId)
 
+      // Full cancellation by a Couples payer: same as a plan change off Couples.
+      if (oldPlan === 'couples') {
+        await startSeparationIfPayer(supabase, userId)
+      }
       break
     }
 
