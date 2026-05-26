@@ -510,8 +510,23 @@ export default function CouplesPage({ onNav }) {
         </div>
       )}
 
+      {/* ── Partner profile unreachable ── */}
+      {/* Renders when the link is active but the partner profile join
+          returned null. Pre-2026-05-26 this caused the whole page to
+          go blank (every render branch gated on `partner` being truthy).
+          Most likely cause now is RLS on profiles still being applied —
+          a single refresh fixes it once the migration is in. */}
+      {link && (link.status === 'accepted' || isSeparating) && !partner && (
+        <div className="fade-up-2 card-static" style={{ marginBottom: 18, padding: '20px 22px', borderColor: 'rgba(201,168,76,0.4)', background: 'var(--gold-dim)' }}>
+          <div style={{ fontWeight: 500, color: 'var(--cream)', marginBottom: 6 }}>Partner details unavailable</div>
+          <div style={{ fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6 }}>
+            Your Couples link exists but we couldn't load your partner's profile. This usually means a database permission is still being applied — refresh the page in a few seconds. If it persists, contact support.
+          </div>
+        </div>
+      )}
+
       {/* ── Separation grace period banner ── */}
-      {isSeparating && partner && link?.separation_deadline && (
+      {isSeparating && link?.separation_deadline && (
         <div className="fade-up-2 card-static" style={{
           marginBottom: 18, padding: '20px 22px',
           borderColor: 'rgba(224,82,82,0.4)', background: 'rgba(224,82,82,0.08)',
@@ -536,7 +551,7 @@ export default function CouplesPage({ onNav }) {
       )}
 
       {/* ── Active link ── */}
-      {(link?.status === 'accepted' || isSeparating) && partner && (
+      {(link?.status === 'accepted' || isSeparating) && (
         <>
           {/* Partner card */}
           <div className="fade-up-2 card-static" style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>

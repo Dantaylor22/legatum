@@ -429,3 +429,21 @@ alter table public.vault_entries
   add constraint vault_entries_separation_choice_check
   check (separation_choice is null or separation_choice in ('keep', 'discard'));
 
+-- ══════════════════════════════════════════════════════════════
+-- profiles — partners can view each other's row
+-- See supabase/migrations/partners-view-profile.sql for context.
+-- ══════════════════════════════════════════════════════════════
+
+drop policy if exists "Partners can view each other's profile" on public.profiles;
+create policy "Partners can view each other's profile" on public.profiles
+  for select using (
+    exists (
+      select 1 from public.partner_links
+      where status in ('accepted', 'separation_pending')
+        and (
+          (requester_id = auth.uid() and partner_id = profiles.id)
+          or (partner_id = auth.uid() and requester_id = profiles.id)
+        )
+    )
+  );
+
