@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
 import { stripePromise, PLANS } from '../lib/stripe'
 import { useAuth } from '../context/AuthContext'
+import { usePartner } from '../hooks/usePartner'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
+
+// Plan ordering for "is this an upgrade or a downgrade?" decisions.
+const PLAN_RANK = { free: 0, single: 1, couples: 2 }
 
 const PLAN_FEATURES = {
   free: [
@@ -44,10 +48,13 @@ export default function PlanPage() {
     return () => window.removeEventListener('dr_trigger_checkout', handleTrigger)
   }, [])
   const [loading, setLoading]           = useState('') // plan key being loaded
-  const [showDowngradeModal, setShowDowngradeModal] = useState(false)
+  // null when no downgrade in flight; otherwise the target plan key.
+  const [downgradeTarget, setDowngradeTarget] = useState(null)
   const [couplesAnnual, setCouplesAnnual] = useState(false)
 
   const currentPlan = profile?.plan || 'free'
+  const { link: partnerLink } = usePartner()
+  const hasActivePartner = partnerLink?.status === 'accepted'
 
   async function checkout(priceId, planId) {
     if (!priceId) {
@@ -167,55 +174,89 @@ export default function PlanPage() {
                 ))}
               </div>
 
-              <button
-                className={isCurrent ? 'btn-ghost' : 'btn-primary'}
-                disabled={isCurrent || loading === p.key}
-                onClick={() => { if (isCurrent) return; if (p.key === 'free') { setShowDowngradeModal(true) } else if (p.priceId) { checkout(p.priceId, p.key) } }}
-                style={{ width: '100%', textAlign: 'center', opacity: isCurrent ? 0.6 : 1 }}>
-                {loading === p.key
-                  ? <span className="spinner" style={{ width: 14, height: 14 }} />
-                  : isCurrent ? 'Current plan'
-                  : p.key === 'free' ? 'Downgrade to free'
-                  : `Upgrade to ${p.name}`}
-              </button>
+              {(() => {
+                const targetRank  = PLAN_RANK[p.key]      ?? 0
+                const currentRank = PLAN_RANK[currentPlan] ?? 0
+                const isDowngrade = !isCurrent && targetRank < currentRank
+                return (
+                  <button
+                    className={isCurrent ? 'btn-ghost' : 'btn-primary'}
+                    disabled={isCurrent || loading === p.key}
+                    onClick={() => {
+                      if (isCurrent) return
+                      // Any downgrade — to free or to a paid lower tier — goes
+                      // through the modal, which opens the Stripe billing portal.
+                      // The portal handles plan changes with proration; starting
+                      // a fresh checkout for a downgrade would double-charge.
+                      if (isDowngrade) setDowngradeTarget(p.key)
+                      else if (p.priceId) checkout(p.priceId, p.key)
+                    }}
+                    style={{ width: '100%', textAlign: 'center', opacity: isCurrent ? 0.6 : 1 }}>
+                    {loading === p.key
+                      ? <span className="spinner" style={{ width: 14, height: 14 }} />
+                      : isCurrent  ? 'Current plan'
+                      : isDowngrade ? `Downgrade to ${p.name}`
+                      : `Upgrade to ${p.name}`}
+                  </button>
+                )
+              })()}
             </div>
           )
         })}
       </div>
 
       {/* Downgrade confirmation modal */}
-      {showDowngradeModal && (
-        <div className="modal-overlay" onClick={() => setShowDowngradeModal(false)}>
+      {downgradeTarget && (() => {
+        const targetName = downgradeTarget === 'free' ? 'Free' : downgradeTarget === 'single' ? 'Single' : 'Couples'
+        const isFromCouples = currentPlan === 'couples'
+        const losses = downgradeTarget === 'free' ? [
+          'Vault entries above 5 will become inaccessible (not deleted)',
+          'All uploaded documents will become inaccessible',
+          'Beneficiaries above 1 will lose access invitations',
+          'Check-in protection will be disabled',
+          'Email reminders for check-ins will stop',
+          'Expiry reminders will stop',
+        ] : downgradeTarget === 'single' ? [
+          'The shared Couples vault will be detached — joint entries return to whoever created them',
+          'Beneficiaries above 3 will lose access invitations',
+          'Your file upload allowance drops from 5 GB to 1 GB',
+          'Support tier drops from Priority to Email',
+        ] : []
+        return (
+        <div className="modal-overlay" onClick={() => setDowngradeTarget(null)}>
           <div className="modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
               <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>
-                Downgrade to Free?
+                Downgrade to {targetName}?
               </h2>
               <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.6 }}>
-                You will lose access to the following features immediately:
+                You will lose access to the following:
               </p>
             </div>
             <div style={{ background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 20 }}>
-              {[
-                "Vault entries above 5 will become inaccessible (not deleted)",
-                "All uploaded documents will become inaccessible",
-                "Beneficiaries above 1 will lose access invitations",
-                "Check-in protection will be disabled",
-                "Email reminders for check-ins will stop",
-                "Expiry reminders will stop",
-              ].map((item, i) => (
+              {losses.map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.5 }}>
                   <span style={{ color: 'var(--danger)', flexShrink: 0 }}>✗</span>
                   {item}
                 </div>
               ))}
             </div>
+            {isFromCouples && hasActivePartner && (
+              <div style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', padding: '14px 16px', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 500, marginBottom: 6 }}>Your partner will be notified</div>
+                <div style={{ fontSize: 12, color: 'var(--cream-dim)', lineHeight: 1.6 }}>
+                  You're the Couples plan payer, so ending it ends your partner's coverage too. Stripe will let you change the plan and we'll send your partner a notification with their options. Any prepaid time on the Couples plan will be refunded pro-rata by Stripe.
+                </div>
+              </div>
+            )}
             <p style={{ fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 20 }}>
-              Your data is not deleted - if you upgrade again your vault entries and documents will be accessible again. To cancel your subscription, use the Manage subscription button below.
+              {downgradeTarget === 'free'
+                ? 'Your data is not deleted — if you upgrade again your vault entries and documents will be accessible again. The button below opens the Stripe billing portal where you cancel your subscription.'
+                : `The button below opens the Stripe billing portal where you can switch your subscription to ${targetName}. Stripe will prorate the difference automatically.`}
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn-ghost" onClick={() => setShowDowngradeModal(false)} style={{ flex: 1 }}>
+              <button className="btn-ghost" onClick={() => setDowngradeTarget(null)} style={{ flex: 1 }}>
                 Keep my current plan
               </button>
               <button className="btn-danger" style={{ flex: 1 }}
@@ -223,28 +264,33 @@ export default function PlanPage() {
                 onClick={async () => {
                   setLoading('downgrade')
                   try {
-                    // Open Stripe portal directly to cancel
                     const { data, error } = await supabase.functions.invoke('create-portal', {
                       body: { userId: user.id, returnUrl: window.location.origin + '/?page=plan' }
                     })
                     if (error || !data?.url) throw new Error('Could not open billing portal')
                     if (!data.url.startsWith('https://billing.stripe.com/')) throw new Error('Invalid portal URL')
-                    setShowDowngradeModal(false)
-                    toast('Redirecting to cancel your subscription. Your plan reverts to Free at the end of your billing period.', { duration: 4000 })
+                    setDowngradeTarget(null)
+                    toast(downgradeTarget === 'free'
+                      ? 'Redirecting to cancel your subscription. Your plan reverts to Free at the end of your billing period.'
+                      : `Redirecting to change your subscription to ${targetName}.`,
+                      { duration: 4000 })
                     window.location.href = data.url
                   } catch {
-                    toast.error('Could not open billing portal - try the Manage subscription button below')
-                    setShowDowngradeModal(false)
+                    toast.error('Could not open billing portal — try the Manage subscription button below')
+                    setDowngradeTarget(null)
                   } finally {
                     setLoading('')
                   }
                 }}>
-                {loading === 'downgrade' ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Cancel subscription →'}
+                {loading === 'downgrade'
+                  ? <span className="spinner" style={{ width: 14, height: 14 }} />
+                  : downgradeTarget === 'free' ? 'Cancel subscription →' : `Switch to ${targetName} →`}
               </button>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Current billing info */}
       {currentPlan !== 'free' && profile?.plan_renewal && (
