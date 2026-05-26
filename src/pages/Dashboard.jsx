@@ -123,7 +123,7 @@ export default function Dashboard({ onNav }) {
         checkin_frequency_days: profile?.checkin_frequency_days || 30,
       })
       toast.success('Check-in recorded')
-      supabase.from('audit_log').insert({ action: 'checked_in' })
+      supabase.from('audit_log').insert({ user_id: user?.id, action: 'checked_in' })
         .then(({ error }) => { if (error) console.error('[audit_log] checked_in insert failed:', error.message) })
         .catch(e => console.error('[audit_log] checked_in insert failed:', e))
     } catch (e) { toast.error(e.message) }

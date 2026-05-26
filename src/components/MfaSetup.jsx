@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
@@ -14,6 +14,30 @@ export default function MfaSetup({ onComplete, onSignOut }) {
   const [codeSent, setCodeSent] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const [recoveryCodes, setRecoveryCodes] = useState(null)
+
+  // If a verified TOTP factor already exists in Supabase Auth but the profile
+  // has mfa_enrolled = false (stuck-loop recovery — see migrations/
+  // profiles-allow-mfa-state.sql), reconcile by setting the flag and finishing.
+  // This silently rescues users whose previous MFA setup completed at the auth
+  // layer but failed to update the profile flag because of the old RLS pin.
+  useEffect(() => {
+    let cancelled = false
+    async function reconcile() {
+      try {
+        const { data } = await supabase.auth.mfa.listFactors()
+        const verified = data?.totp?.find(f => f.status === 'verified')
+        if (!verified || cancelled) return
+        await supabase.from('profiles')
+          .update({ mfa_enrolled: true, mfa_email_fallback: false })
+          .eq('id', user.id)
+        toast.success('Authenticator already set up - signing you in')
+        onComplete?.()
+      } catch { /* fall through to normal setup */ }
+    }
+    if (user?.id) reconcile()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 

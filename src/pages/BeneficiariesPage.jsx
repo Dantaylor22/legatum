@@ -285,7 +285,7 @@ export default function BeneficiariesPage({ onNav }) {
     if (!confirm(`Remove ${name} as a beneficiary?`)) return
     await removeBeneficiary(id)
     toast.success('Beneficiary removed')
-    supabase.from('audit_log').insert({ action: 'beneficiary_removed' })
+    supabase.from('audit_log').insert({ user_id: profile?.id, action: 'beneficiary_removed' })
       .then(({ error }) => { if (error) console.error('[audit_log] beneficiary_removed insert failed:', error.message) })
       .catch(e => console.error('[audit_log] beneficiary_removed insert failed:', e))
   }

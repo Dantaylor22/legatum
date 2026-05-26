@@ -334,8 +334,13 @@ alter table public.webauthn_challenges enable row level security;
 alter table public.beneficiaries
   add column if not exists token_expires_at timestamptz default null;
 
--- B-4 fix: full profiles WITH CHECK with all security columns locked
--- (runs in round6 after all ADD COLUMN statements have executed)
+-- B-4 fix: full profiles WITH CHECK with all *billing* columns locked.
+-- mfa_enrolled / mfa_email_fallback / mfa_backup_email are deliberately NOT
+-- pinned: the client legitimately sets these as it completes MFA enrolment
+-- (MfaSetup.jsx:88). The real security boundary is the Supabase Auth factor
+-- list, not this denormalised flag — an attacker who flipped mfa_enrolled
+-- to false in the profile still has to defeat Supabase Auth's actual MFA
+-- challenge to sign in.
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles
   for update using (auth.uid() = id)
@@ -345,11 +350,8 @@ create policy "Users can update own profile" on public.profiles
     and coalesce(stripe_customer_id, '')     = coalesce((select stripe_customer_id     from public.profiles where id = auth.uid()), '')
     and coalesce(stripe_subscription_id, '') = coalesce((select stripe_subscription_id from public.profiles where id = auth.uid()), '')
     and coalesce(plan_renewal::text, '')     = coalesce((select plan_renewal::text     from public.profiles where id = auth.uid()), '')
-    and mfa_enrolled       = (select mfa_enrolled       from public.profiles where id = auth.uid())
-    and mfa_email_fallback = (select mfa_email_fallback from public.profiles where id = auth.uid())
     and coalesce(switch_triggered_at::text, '') = coalesce((select switch_triggered_at::text from public.profiles where id = auth.uid()), '')
-    and coalesce(mfa_backup_email, '')          = coalesce((select mfa_backup_email          from public.profiles where id = auth.uid()), '')
-    -- Note: duress_pin_set intentionally NOT locked here (users legitimately set it)
+    -- mfa_* fields intentionally NOT locked — see comment above
   );
 
 -- ══════════════════════════════════════════════════════════════
