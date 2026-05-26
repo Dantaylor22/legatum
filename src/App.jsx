@@ -25,6 +25,7 @@ import Dashboard from './pages/Dashboard'
 // initial bundle from ~960kB to a smaller core + per-route chunks.
 const VaultPage           = lazy(() => import('./pages/VaultPage'))
 const BeneficiariesPage   = lazy(() => import('./pages/BeneficiariesPage'))
+const NominationsPage     = lazy(() => import('./pages/NominationsPage'))
 const CheckInPage         = lazy(() => import('./pages/CheckInPage'))
 const PlanPage            = lazy(() => import('./pages/PlanPage'))
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
@@ -268,6 +269,7 @@ function AppInner() {
       case 'dashboard':     return <Dashboard onNav={setPage} />
       case 'vault':         return <VaultPage onNav={setPage} />
       case 'beneficiaries': return <BeneficiariesPage onNav={setPage} />
+      case 'nominations':   return <NominationsPage />
       case 'checkin':       return <CheckInPage />
       case 'afteriamgone':  return <AfterIAmGonePage />
       case 'documents':     return <DocumentsPage onNav={setPage} />

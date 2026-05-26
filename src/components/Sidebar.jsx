@@ -9,6 +9,7 @@ const NAV_IDS = [
   { id: 'vault',        icon: '⬡', key: 'nav_vault' },
   { id: 'documents',    icon: '📁', key: 'nav_documents' },
   { id: 'beneficiaries',icon: '◉', key: 'nav_beneficiaries' },
+  { id: 'nominations',  icon: '🛡', key: null, label: 'I am a beneficiary' },
   { id: 'couples',      icon: '💑', key: null, label: 'Couples vault', couplesOnly: true },
   { id: 'family',       icon: '👨‍👩‍👧‍👦', key: 'nav_family' },
   { id: 'checkin',      icon: '◎', key: 'nav_checkin' },
