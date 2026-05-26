@@ -47,11 +47,11 @@ async function addressNowRetrieve(id) {
   const params = new URLSearchParams({
     Key: ADDRESSNOW_KEY,
     Id: id,
-    Field1Format: '{BuildingNumber}{ }{ThoroughfareName}',
-    Field2Format: '{DependentThoroughfareName}',
-    Field3Format: '{DependentLocality}',
-    Field4Format: '{PostTown}',
-    Field5Format: '{CountyName}',
+    Field1Format: '{Line1}',
+    Field2Format: '{Line2}',
+    Field3Format: '{Line3}',
+    Field4Format: '{City}',
+    Field5Format: '{ProvinceName}',
     Field6Format: '{PostalCode}',
   })
   const res = await fetch(`https://api.addressnow.co.uk/capture/interactive/retrieve/v1.20/json3.ws?${params}`)
@@ -133,8 +133,10 @@ export default function AddressLookup({ value, onChange }) {
           postcode: addr.Field6 || '',
         }
         setFields(next)
-        onChange(joinAddress(next))
-        setQuery(joinAddress(next))
+        const joined = joinAddress(next)
+        prevValue.current = joined
+        onChange(joined)
+        setQuery(joined)
         setOpen(false)
         setSuggestions([])
         setUseManual(true)  // show fields for any tweaks
@@ -150,7 +152,9 @@ export default function AddressLookup({ value, onChange }) {
   function setField(k, v) {
     const next = { ...fields, [k]: v }
     setFields(next)
-    onChange(joinAddress(next))
+    const joined = joinAddress(next)
+    prevValue.current = joined
+    onChange(joined)
   }
 
   const hasValue = !!(fields.line1 || fields.town || fields.postcode)
