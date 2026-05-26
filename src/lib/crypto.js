@@ -411,27 +411,32 @@ export function getTrustedDeviceMode(userId) {
 }
 
 // Opportunistically upgrade a legacy trusted device to PRF on next PIN entry.
-// No-op unless: legacy active, PRF not yet active, device supports PRF, and the
-// 24h cooldown after a previous cancellation has elapsed. On success, the legacy
-// ciphertext is replaced with a PRF-bound one — the user never re-types the PIN.
+// Returns one of:
+//   'skipped'      — nothing to migrate, or already on PRF
+//   'unsupported'  — browser/authenticator can't do PRF (won't retry on this device)
+//   'deferred'     — cooldown still active from a previous cancellation
+//   'migrated'     — success: legacy ciphertext replaced with PRF-bound one
+//   'cancelled'    — user dismissed the biometric prompt (24h cooldown set)
 export async function migrateTrustedDevice(pin, userId, userEmail) {
-  if (!hasLegacyTrustedDevice(userId)) return
-  if (prfHasTrust(userId)) return
-  if (!window.PublicKeyCredential) return
-  if (localStorage.getItem(PRF_UNSUPPORTED_KEY) === 'true') return
+  if (!hasLegacyTrustedDevice(userId)) return 'skipped'
+  if (prfHasTrust(userId))             return 'skipped'
+  if (!window.PublicKeyCredential)     return 'unsupported'
+  if (localStorage.getItem(PRF_UNSUPPORTED_KEY) === 'true') return 'unsupported'
   const deferUntil = parseInt(localStorage.getItem(PRF_DEFER_KEY + ':' + userId) || '0', 10)
-  if (Date.now() < deferUntil) return
+  if (Date.now() < deferUntil) return 'deferred'
 
   const ok = await prfSavePin(pin, userId, userEmail).catch(() => false)
   if (ok) {
     localStorage.removeItem(TRUSTED_DEVICE_PIN_KEY + ':' + userId)
     localStorage.removeItem(PRF_DEFER_KEY + ':' + userId)
-  } else {
-    // User cancelled or transient error. Defer next attempt so we don't prompt
-    // on every unlock. PRF_UNSUPPORTED_KEY is set inside prfEnroll for the
-    // "authenticator doesn't do PRF" case and stops migration permanently.
-    localStorage.setItem(PRF_DEFER_KEY + ':' + userId, String(Date.now() + PRF_DEFER_MS))
+    return 'migrated'
   }
+  // Either prfEnroll set PRF_UNSUPPORTED_KEY (authenticator can't do PRF) or
+  // the user cancelled / a transient error occurred. The unsupported flag
+  // would already be set in the former case; the latter triggers a 24h cooldown.
+  if (localStorage.getItem(PRF_UNSUPPORTED_KEY) === 'true') return 'unsupported'
+  localStorage.setItem(PRF_DEFER_KEY + ':' + userId, String(Date.now() + PRF_DEFER_MS))
+  return 'cancelled'
 }
 
 // ── Vault PIN recovery codes ────────────────────────────────────────────────

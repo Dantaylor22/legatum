@@ -72,29 +72,28 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
       const salt = profile?.encryption_salt
       if (!salt) throw new Error('Vault configuration error - please contact support')
 
-      // Derive the key from the entered PIN
+      // Derive the real-PIN key and try it first. If it fails (wrong PIN OR the
+      // user is entering their duress PIN), fall through to the duress check.
       const key = await deriveKey(pin, user.id, salt)
 
-      // Verify the key is correct by attempting to decrypt a test value
-      // We store a small encrypted test string in the profile for this purpose
+      let realPinValid = false
       if (profile?.key_verification) {
         const prevKey = getSessionKey()
         setSessionKey(key)
         try {
           const result = await decrypt(profile.key_verification)
-          if (result !== 'dr_key_ok') {
-            setSessionKey(prevKey)
-            throw new Error('Incorrect PIN')
-          }
-        } catch {
-          setSessionKey(prevKey)
-          throw new Error('Incorrect PIN')
-        }
+          realPinValid = result === 'dr_key_ok'
+        } catch { /* not the real PIN */ }
+        if (!realPinValid) setSessionKey(prevKey)
+      } else {
+        // No verification record (very old account) — assume PIN is valid;
+        // legacy behaviour. Duress flow still has its own verification record.
+        realPinValid = true
       }
 
-      // Check if this is the duress PIN (separate key verification)
+      // If the real PIN didn't verify, check the duress PIN before failing.
       let isDuress = false
-      if (profile?.duress_key_verification && profile?.duress_pin_set) {
+      if (!realPinValid && profile?.duress_key_verification && profile?.duress_pin_set) {
         try {
           const dKey = await deriveKey(pin, user.id + '_duress', profile.encryption_salt)
           const prevKey = getSessionKey()
@@ -102,9 +101,13 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
           try {
             const dResult = await decrypt(profile.duress_key_verification)
             isDuress = dResult === 'dr_duress_ok'
-          } catch { /* not duress */ }
+          } catch { /* not the duress PIN either */ }
           if (!isDuress) setSessionKey(prevKey)
-        } catch { /* not duress */ }
+        } catch { /* derive failed; not duress */ }
+      }
+
+      if (!realPinValid && !isDuress) {
+        throw new Error('Incorrect PIN')
       }
 
       if (isDuress) {
@@ -124,10 +127,15 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
       if (trustDevice) {
         await saveTrustedPin(pin, user.id, user.email)
       } else {
-        // Silently upgrade an existing legacy trusted device to PRF (Touch ID /
-        // Windows Hello). Fire-and-forget so unlock isn't blocked by the
-        // biometric prompt; the migration internally defers 24h on cancel.
-        migrateTrustedDevice(pin, user.id, user.email).catch(() => {})
+        // Try to upgrade existing legacy trust to PRF (Touch ID / Windows Hello).
+        // Fire-and-forget so unlock isn't blocked by the biometric prompt, but
+        // toast the outcome so the user gets visible feedback.
+        migrateTrustedDevice(pin, user.id, user.email)
+          .then(result => {
+            if (result === 'migrated')    toast.success('Upgraded to biometric unlock')
+            if (result === 'unsupported') toast('Biometric unlock not available on this device', { icon: 'ℹ️' })
+          })
+          .catch(() => {})
       }
       toast.success('Vault unlocked')
       onUnlocked()
