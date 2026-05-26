@@ -251,7 +251,9 @@ export default function BeneficiariesPage({ onNav }) {
   async function handleAdd(form) {
     await addBeneficiary(form)
     toast.success('Invite sent to ' + form.email)
-    supabase.from('audit_log').insert({ action: 'beneficiary_added', user_id: form.user_id }).then(() => {}).then(() => {}).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'beneficiary_added', user_id: form.user_id })
+      .then(({ error }) => { if (error) console.error('[audit_log] beneficiary_added insert failed:', error.message) })
+      .catch(e => console.error('[audit_log] beneficiary_added insert failed:', e))
   }
 
   async function handleToggleExecutor(id, currentIsExecutor) {
@@ -283,7 +285,9 @@ export default function BeneficiariesPage({ onNav }) {
     if (!confirm(`Remove ${name} as a beneficiary?`)) return
     await removeBeneficiary(id)
     toast.success('Beneficiary removed')
-    supabase.from('audit_log').insert({ action: 'beneficiary_removed' }).then(() => {}).then(() => {}).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'beneficiary_removed' })
+      .then(({ error }) => { if (error) console.error('[audit_log] beneficiary_removed insert failed:', error.message) })
+      .catch(e => console.error('[audit_log] beneficiary_removed insert failed:', e))
   }
 
   return (

@@ -49,7 +49,8 @@ if (-not $status) {
 }
 
 Write-Host ""
-$msg = Read-Host "  Enter commit message"
+$msg = ''
+try { $msg = Read-Host "  Enter commit message" } catch { $msg = '' }
 if (-not $msg) { $msg = "Deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
 
 # Run git commands via cmd.exe to avoid PowerShell stderr handling

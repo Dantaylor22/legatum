@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
 
-// Royal Mail AddressNow Capture integration
-// Type any part of an address or postcode - autocompletes against full PAF database
-// Falls back to structured manual entry if key not configured
-
-const ADDRESSNOW_KEY = import.meta.env.VITE_ADDRESSNOW_KEY || ''
+// Royal Mail AddressNow Capture integration. The API key lives server-side in the
+// addressnow-proxy Edge Function (set ADDRESSNOW_KEY as a Supabase secret); this
+// component never sees the real key. If the function is missing or misconfigured,
+// the find call fails silently and the user can fall back to manual entry.
 
 const EMPTY_FIELDS = { company: '', street: '', line2: '', town: '', county: '', postcode: '' }
 
@@ -53,37 +53,22 @@ function joinAddress(f) {
   return company || rest
 }
 
-// AddressNow find + retrieve API calls
+// AddressNow find + retrieve calls — proxied through Supabase Edge Function so
+// the AddressNow key never reaches the browser.
 async function addressNowFind(query, lastId = '') {
-  const params = new URLSearchParams({
-    Key: ADDRESSNOW_KEY,
-    Text: query,
-    IsMiddleware: 'false',
-    Container: lastId,
-    Origin: '',
-    Countries: 'GBR',
-    Limit: '7',
-    Language: 'en-gb',
+  const { data, error } = await supabase.functions.invoke('addressnow-proxy', {
+    body: { action: 'find', text: query, container: lastId },
   })
-  const res = await fetch(`https://api.addressnow.co.uk/capture/interactive/find/v1.10/json3.ws?${params}`)
-  const data = await res.json()
-  return data.Items || []
+  if (error) throw error
+  return data?.Items || []
 }
 
 async function addressNowRetrieve(id) {
-  const params = new URLSearchParams({
-    Key: ADDRESSNOW_KEY,
-    Id: id,
-    Field1Format: '{Company}',
-    Field2Format: '{Line1}',
-    Field3Format: '{Line2}',
-    Field4Format: '{City}',
-    Field5Format: '{ProvinceName}',
-    Field6Format: '{PostalCode}',
+  const { data, error } = await supabase.functions.invoke('addressnow-proxy', {
+    body: { action: 'retrieve', id },
   })
-  const res = await fetch(`https://api.addressnow.co.uk/capture/interactive/retrieve/v1.20/json3.ws?${params}`)
-  const data = await res.json()
-  return data.Items?.[0] || null
+  if (error) throw error
+  return data?.Item || null
 }
 
 export default function AddressLookup({ value, onChange }) {
@@ -92,7 +77,7 @@ export default function AddressLookup({ value, onChange }) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading]       = useState(false)
   const [open, setOpen]             = useState(false)
-  const [useManual, setUseManual]   = useState(!ADDRESSNOW_KEY)
+  const [useManual, setUseManual]   = useState(false)
   const dropdownRef                 = useRef(null)
   const debounceRef                 = useRef(null)
 
@@ -294,25 +279,23 @@ export default function AddressLookup({ value, onChange }) {
           </div>
 
           <div style={{ display: 'flex', gap: 12, marginTop: 2 }}>
-            {ADDRESSNOW_KEY && (
-              <button type="button" onClick={() => {
-                setUseManual(false)
-                setQuery('')
-                setSuggestions([])
-              }} style={{
-                background: 'transparent', border: 'none', color: 'var(--gold)',
-                fontSize: 11, cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0,
-              }}>
-                Search again
-              </button>
-            )}
+            <button type="button" onClick={() => {
+              setUseManual(false)
+              setQuery('')
+              setSuggestions([])
+            }} style={{
+              background: 'transparent', border: 'none', color: 'var(--gold)',
+              fontSize: 11, cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0,
+            }}>
+              Search again
+            </button>
             {hasValue && (
               <button type="button" onClick={() => {
                 setFields({ ...EMPTY_FIELDS })
                 prevValue.current = ''
                 onChange('')
                 setQuery('')
-                setUseManual(!ADDRESSNOW_KEY)
+                setUseManual(false)
               }} style={{
                 background: 'transparent', border: 'none', color: 'var(--text-sub)',
                 fontSize: 11, cursor: 'pointer', fontFamily: 'var(--sans)', padding: 0,

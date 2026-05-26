@@ -53,16 +53,16 @@ function DependantModal({ dependant, type, onClose, onSave }) {
   const [saving, setSaving] = useState(false)
   const draftKey = `dr_family_draft_${type?.id || 'child'}`
 
-  // Restore draft on mount (in case vault locked mid-edit)
-  // Only for new entries, not edits
-  useState(() => {
+  // Restore draft on mount (in case vault locked mid-edit). Only for new entries.
+  useEffect(() => {
     if (!dependant?.id) {
       try {
         const saved = sessionStorage.getItem(draftKey)
         if (saved) setData(prev => ({ ...prev, ...JSON.parse(saved) }))
       } catch {}
     }
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleField(id, value) {
     setData(prev => {

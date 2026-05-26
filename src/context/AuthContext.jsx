@@ -150,7 +150,9 @@ export function AuthProvider({ children }) {
   async function signIn({ email, password }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    supabase.from('audit_log').insert({ action: 'signed_in', metadata: { method: 'email' } }).then(() => {}).catch(() => {})
+    supabase.from('audit_log').insert({ action: 'signed_in', metadata: { method: 'email' } })
+      .then(({ error }) => { if (error) console.error('[audit_log] signed_in insert failed:', error.message) })
+      .catch(e => console.error('[audit_log] signed_in insert failed:', e))
     // Do NOT derive a key from the password here.
     // The vault key is derived from the vault PIN (not the login password).
     // VaultPinEntry will handle key derivation using PIN + randomSalt from profile.

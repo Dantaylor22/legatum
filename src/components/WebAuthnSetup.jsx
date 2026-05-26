@@ -15,20 +15,12 @@ function bufToB64(buf) {
 }
 
 async function callWebAuthn(action, extra = {}) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webauthn`,
-    {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body:    JSON.stringify({ action, ...extra }),
-    }
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || 'WebAuthn request failed')
-  }
-  return res.json()
+  const { data, error } = await supabase.functions.invoke('webauthn', {
+    body: { action, ...extra },
+  })
+  if (error) throw new Error(error.message || 'WebAuthn request failed')
+  if (data?.error) throw new Error(data.error)
+  return data
 }
 
 export function WebAuthnSetup({ onDone, onCancel }) {
@@ -160,8 +152,6 @@ export function WebAuthnSetup({ onDone, onCancel }) {
 
 export async function verifyWebAuthn(userId) {
   // Returns true if assertion succeeds
-  const { data: { session } } = await supabase.auth.getSession()
-
   const { challenge, allowCredentials } = await callWebAuthn('assertion_challenge')
   if (!allowCredentials?.length) return false
 
