@@ -18,10 +18,17 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
   const [showRecovery, setShowRecovery] = useState(false)
   const MAX_ATTEMPTS = 5
 
-  // Auto-unlock if this device was previously trusted
+  // Auto-unlock if this device was previously trusted.
+  // Skipped entirely when a duress PIN is configured: auto-unlock bypasses the
+  // PIN form, which would defeat the duress escape on familiar devices (where
+  // it's most likely to be coerced). The user opted into this tradeoff when
+  // they set up duress — remove the duress PIN in Settings to re-enable
+  // auto-unlock. Note: no toast is shown here, since revealing the reason
+  // would tip off an attacker watching the screen.
   useEffect(() => {
     async function tryAutoUnlock() {
       if (!user?.id || !profile?.encryption_salt) return
+      if (profile?.duress_pin_set) return
       if (!hasTrustedDevice(user.id)) return
       setAutoUnlocking(true)
       try {
