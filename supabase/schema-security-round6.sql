@@ -406,3 +406,26 @@ drop policy if exists "Users can manage own entries"      on public.vault_entrie
 drop policy if exists "Beneficiaries can confirm via token" on public.beneficiaries;
 drop policy if exists "Beneficiaries confirm own invite"   on public.beneficiaries;
 
+-- ══════════════════════════════════════════════════════════════
+-- 14-day separation grace period
+-- See supabase/migrations/separation-grace-period.sql for context.
+-- ══════════════════════════════════════════════════════════════
+
+alter table public.partner_links
+  drop constraint if exists partner_links_status_check;
+alter table public.partner_links
+  add constraint partner_links_status_check
+  check (status in ('pending','accepted','declined','unlinked','separation_pending'));
+
+alter table public.partner_links
+  add column if not exists separation_deadline timestamptz default null;
+
+alter table public.vault_entries
+  add column if not exists separation_choice text default null;
+
+alter table public.vault_entries
+  drop constraint if exists vault_entries_separation_choice_check;
+alter table public.vault_entries
+  add constraint vault_entries_separation_choice_check
+  check (separation_choice is null or separation_choice in ('keep', 'discard'));
+

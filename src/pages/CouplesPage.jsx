@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { usePartner } from '../hooks/usePartner'
 import { useVault } from '../hooks/useVault'
@@ -6,6 +6,97 @@ import { CATEGORIES } from '../lib/categories'
 import { validateEmail } from '../lib/validation'
 import { supabase } from '../lib/supabase'
 import toast from 'react-hot-toast'
+
+function daysBetween(future) {
+  return Math.max(0, Math.ceil((new Date(future).getTime() - Date.now()) / 86400000))
+}
+
+// Modal showing this user's own shared vault entries with a keep/discard
+// radio per entry. Saves to vault_entries.separation_choice — finalize-separation
+// reads these on day 14 and either detaches (keep) or deletes (discard) each row.
+function SeparationReview({ entries, onClose, onSaved }) {
+  const ownShared = entries.filter(e => e.is_shared)
+  const [choices, setChoices] = useState(() => {
+    const init = {}
+    for (const e of ownShared) init[e.id] = e.separation_choice || 'keep'
+    return init
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await Promise.all(Object.entries(choices).map(([id, choice]) =>
+        supabase.from('vault_entries').update({ separation_choice: choice }).eq('id', id)
+      ))
+      toast.success('Choices saved')
+      onSaved?.()
+      onClose()
+    } catch (err) {
+      toast.error(err.message || 'Could not save choices')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 560, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ marginBottom: 18 }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 6 }}>Review your shared entries</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.6 }}>
+            These are the entries you created in the shared vault. For each, choose whether to keep it in your private vault or discard it when the Couples link ends. Entries you don't decide on default to <strong style={{ color: 'var(--text)' }}>Keep</strong>.
+          </p>
+        </div>
+        {ownShared.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-sub)', padding: '20px 0', textAlign: 'center' }}>
+            You didn't create any shared entries. Nothing to review.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+            {ownShared.map(e => {
+              const cat = CATEGORIES.find(c => c.id === e.category)
+              return (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+                  <span style={{ fontSize: 18 }}>{cat?.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 14 }}>{e.title}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sub)' }}>{cat?.label}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[
+                      { v: 'keep',    label: 'Keep',    color: 'var(--success)' },
+                      { v: 'discard', label: 'Discard', color: 'var(--danger)' },
+                    ].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setChoices(c => ({ ...c, [e.id]: opt.v }))}
+                        style={{
+                          padding: '6px 12px', fontSize: 11, borderRadius: 6,
+                          background: choices[e.id] === opt.v ? opt.color : 'transparent',
+                          color: choices[e.id] === opt.v ? '#0d1b2a' : 'var(--text-sub)',
+                          border: `1px solid ${choices[e.id] === opt.v ? opt.color : 'var(--border-md)'}`,
+                          cursor: 'pointer', fontFamily: 'var(--sans)',
+                        }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn-ghost" onClick={onClose} style={{ flex: 1 }}>Close</button>
+          {ownShared.length > 0 && (
+            <button className="btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
+              {saving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save choices'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Invite form ────────────────────────────────────────────────────────────
 function InviteForm({ onResult }) {
@@ -244,9 +335,33 @@ export default function CouplesPage({ onNav }) {
   const [inviteResult, setInviteResult] = useState(null)
   const [inviteEmail, setInviteEmail]   = useState('')
   const [creditModal, setCreditModal]   = useState(null)
+  const [showReview, setShowReview]     = useState(false)
+  const [finalizing, setFinalizing]     = useState(false)
 
   const isPaid = profile?.plan === 'couples'
   const isRequester = link?.requester_id === user?.id
+  const isSeparating = link?.status === 'separation_pending'
+
+  // Auto-finalize once the deadline has elapsed. Client-side trigger — runs on
+  // every CouplesPage load. If neither user logs in for a while the link sits
+  // in separation_pending indefinitely; that's acceptable for v1 (the finalize
+  // function is idempotent and a nightly cron can be added later).
+  useEffect(() => {
+    if (!link || link.status !== 'separation_pending') return
+    if (!link.separation_deadline) return
+    if (new Date(link.separation_deadline).getTime() > Date.now()) return
+    if (finalizing) return
+    setFinalizing(true)
+    supabase.functions.invoke('finalize-separation', { body: { linkId: link.id } })
+      .then(({ error }) => {
+        if (error) { console.error('[finalize-separation]', error.message); return }
+        toast('Couples link finalized. Shared entries you marked Keep are now in your private vault.', { duration: 6000 })
+        refresh()
+      })
+      .catch(e => console.error('[finalize-separation]', e))
+      .finally(() => setFinalizing(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link?.id, link?.status, link?.separation_deadline])
 
   const sharedEntries  = entries.filter(e => e.is_shared)
   const partnerEntries = entries.filter(e =>
@@ -395,8 +510,33 @@ export default function CouplesPage({ onNav }) {
         </div>
       )}
 
+      {/* ── Separation grace period banner ── */}
+      {isSeparating && partner && link?.separation_deadline && (
+        <div className="fade-up-2 card-static" style={{
+          marginBottom: 18, padding: '20px 22px',
+          borderColor: 'rgba(224,82,82,0.4)', background: 'rgba(224,82,82,0.08)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <div style={{ fontSize: 28, flexShrink: 0 }}>⏰</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, color: 'var(--cream)', marginBottom: 6, fontSize: 15 }}>
+                Couples plan ending in {daysBetween(link.separation_deadline)} day{daysBetween(link.separation_deadline) === 1 ? '' : 's'}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.6, marginBottom: 12 }}>
+                {isRequester
+                  ? `You ended your Couples link. After ${new Date(link.separation_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached. Review the entries you created and choose which to keep in your private vault.`
+                  : `${link.requester?.full_name || 'Your partner'} ended the Couples link. On ${new Date(link.separation_deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}, the shared vault will be detached and you'll be moved to the Free plan. Review the entries you created and choose which to keep in your private vault.`}
+              </div>
+              <button className="btn-primary" style={{ fontSize: 12, padding: '8px 16px' }} onClick={() => setShowReview(true)}>
+                Review shared entries
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Active link ── */}
-      {link?.status === 'accepted' && partner && (
+      {(link?.status === 'accepted' || isSeparating) && partner && (
         <>
           {/* Partner card */}
           <div className="fade-up-2 card-static" style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -476,6 +616,14 @@ export default function CouplesPage({ onNav }) {
           creditInfo={creditModal.creditInfo}
           partnerName={creditModal.partnerName}
           onClose={() => setCreditModal(null)}
+        />
+      )}
+
+      {showReview && (
+        <SeparationReview
+          entries={entries}
+          onClose={() => setShowReview(false)}
+          onSaved={refresh}
         />
       )}
     </div>
