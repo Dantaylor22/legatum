@@ -96,7 +96,7 @@ export default function VaultPinEntry({ onUnlocked, onSignOut }) {
       let isDuress = false
       if (profile?.duress_key_verification && profile?.duress_pin_set) {
         try {
-          const dKey = await deriveKey(unenrollCode || pin, user.id + '_duress', profile.encryption_salt)
+          const dKey = await deriveKey(pin, user.id + '_duress', profile.encryption_salt)
           const prevKey = getSessionKey()
           setSessionKey(dKey)
           try {
