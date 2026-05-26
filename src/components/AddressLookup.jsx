@@ -6,24 +6,51 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 
 const ADDRESSNOW_KEY = import.meta.env.VITE_ADDRESSNOW_KEY || ''
 
+const EMPTY_FIELDS = { company: '', street: '', line2: '', town: '', county: '', postcode: '' }
+
+// Stored format: `{company}\n{street}, {line2}, {town}, {county}, {postcode}` (blanks dropped).
+// The \n is the only reliable delimiter for company vs postal address; everything else is
+// comma-separated. Renders as a space in summary <div>s but parses unambiguously.
 function parseAddress(str) {
-  if (!str) return { line1: '', line2: '', line3: '', town: '', county: '', postcode: '' }
-  const parts = str.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
-  return {
-    line1:    parts[0] || '',
-    line2:    parts[1] || '',
-    line3:    parts[2] || '',
-    town:     parts[3] || '',
-    county:   parts[4] || '',
-    postcode: parts[5] || '',
+  if (!str) return { ...EMPTY_FIELDS }
+  let company = ''
+  let rest = str
+  const nlIdx = str.indexOf('\n')
+  if (nlIdx !== -1) {
+    company = str.slice(0, nlIdx).trim()
+    rest = str.slice(nlIdx + 1).trim()
   }
+  const parts = rest.split(',').map(s => s.trim()).filter(Boolean)
+
+  // Pop trailing UK postcode if present.
+  const ukPostcode = /^[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}$/i
+  let postcode = ''
+  if (parts.length && ukPostcode.test(parts[parts.length - 1])) {
+    postcode = parts.pop().toUpperCase()
+  }
+
+  // Best-effort placement for the remaining parts. Old saved addresses don't have an
+  // explicit company line, so 1–4 surviving parts get mapped into street/line2/town/county.
+  let street = '', line2 = '', town = '', county = ''
+  if (parts.length === 1) { street = parts[0] }
+  else if (parts.length === 2) { street = parts[0]; town = parts[1] }
+  else if (parts.length === 3) { street = parts[0]; line2 = parts[1]; town = parts[2] }
+  else if (parts.length >= 4) {
+    street = parts[0]; line2 = parts[1]
+    town = parts[parts.length - 2]
+    county = parts[parts.length - 1]
+  }
+  return { company, street, line2, town, county, postcode }
 }
 
 function joinAddress(f) {
-  return [f.line1, f.line2, f.line3, f.town, f.county, f.postcode]
+  const rest = [f.street, f.line2, f.town, f.county, f.postcode]
     .map(s => (s || '').trim())
     .filter(Boolean)
     .join(', ')
+  const company = (f.company || '').trim()
+  if (company && rest) return `${company}\n${rest}`
+  return company || rest
 }
 
 // AddressNow find + retrieve API calls
@@ -47,9 +74,9 @@ async function addressNowRetrieve(id) {
   const params = new URLSearchParams({
     Key: ADDRESSNOW_KEY,
     Id: id,
-    Field1Format: '{Line1}',
-    Field2Format: '{Line2}',
-    Field3Format: '{Line3}',
+    Field1Format: '{Company}',
+    Field2Format: '{Line1}',
+    Field3Format: '{Line2}',
     Field4Format: '{City}',
     Field5Format: '{ProvinceName}',
     Field6Format: '{PostalCode}',
@@ -119,17 +146,12 @@ export default function AddressLookup({ value, onChange }) {
     try {
       const addr = await addressNowRetrieve(item.Id)
       if (addr) {
-        // Line1 = house/street, Line2 = locality, Line3 = district
-        // Line4 = post town, Line5 = county, PostalCode = postcode
-        // Combine locality+district into line2/line3, skip blanks
-        const locality = addr.Field2 || ''
-        const district = addr.Field3 || ''
         const next = {
-          line1: addr.Field1 || '',
-          line2: locality,
-          line3: locality && district && locality !== district ? district : (!locality ? district : ''),
-          town:  addr.Field4 || '',
-          county: addr.Field5 || '',
+          company:  addr.Field1 || '',
+          street:   addr.Field2 || '',
+          line2:    addr.Field3 || '',
+          town:     addr.Field4 || '',
+          county:   addr.Field5 || '',
           postcode: addr.Field6 || '',
         }
         setFields(next)
@@ -157,7 +179,7 @@ export default function AddressLookup({ value, onChange }) {
     onChange(joined)
   }
 
-  const hasValue = !!(fields.line1 || fields.town || fields.postcode)
+  const hasValue = !!(fields.company || fields.street || fields.town || fields.postcode)
 
   return (
     <div>
@@ -233,24 +255,24 @@ export default function AddressLookup({ value, onChange }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div>
             <label style={{ fontSize: 11, color: 'var(--text-sub)', display: 'block', marginBottom: 3 }}>
-              House / flat / building name or number
+              Business name / care of (optional)
             </label>
-            <input className="input" placeholder="e.g. 42, Flat 3, The Old Mill" value={fields.line1}
-              onChange={e => setField('line1', e.target.value)} />
+            <input className="input" placeholder="e.g. Grant McGregor Ltd" value={fields.company}
+              onChange={e => setField('company', e.target.value)} />
           </div>
           <div>
             <label style={{ fontSize: 11, color: 'var(--text-sub)', display: 'block', marginBottom: 3 }}>
-              Street
+              Street address
             </label>
-            <input className="input" placeholder="e.g. High Street" value={fields.line2}
+            <input className="input" placeholder="e.g. 22 Hanover Street" value={fields.street}
+              onChange={e => setField('street', e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--text-sub)', display: 'block', marginBottom: 3 }}>
+              Address line 2 (optional)
+            </label>
+            <input className="input" placeholder="e.g. Thornton Business Park" value={fields.line2}
               onChange={e => setField('line2', e.target.value)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: 'var(--text-sub)', display: 'block', marginBottom: 3 }}>
-              Address line 3 (optional)
-            </label>
-            <input className="input" placeholder="e.g. Thornton Business Park" value={fields.line3}
-              onChange={e => setField('line3', e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}>
@@ -286,8 +308,8 @@ export default function AddressLookup({ value, onChange }) {
             )}
             {hasValue && (
               <button type="button" onClick={() => {
-                const empty = { line1:'', line2:'', line3:'', town:'', county:'', postcode:'' }
-                setFields(empty)
+                setFields({ ...EMPTY_FIELDS })
+                prevValue.current = ''
                 onChange('')
                 setQuery('')
                 setUseManual(!ADDRESSNOW_KEY)
