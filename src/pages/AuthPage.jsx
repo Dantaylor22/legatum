@@ -41,14 +41,14 @@ function AppleIcon() {
   )
 }
 
+// Auth lockout constants, used in AuthPage.handleSubmit.
+const MAX_AUTH_ATTEMPTS = 5
+const LOCKOUT_MS        = 5 * 60 * 1000  // 5 minutes
+
 function ForgotPasswordModal({ onClose }) {
   const [email, setEmail]   = useState('')
   const [sent, setSent]     = useState(false)
   const [loading, setLoading]     = useState(false)
-  const [authAttempts, setAuthAttempts] = useState(0)
-  const [lockedUntil, setLockedUntil]   = useState(null)
-  const MAX_AUTH_ATTEMPTS = 5
-  const LOCKOUT_MS        = 5 * 60 * 1000  // 5 minutes
 
   async function handleReset() {
     if (!email) { toast.error('Enter your email address'); return }
@@ -121,6 +121,8 @@ export default function AuthPage({ onBack, selectedPlan, onClearPlan }) {
   const [signupEmail, setSignupEmail]   = useState('')
   const [form, setForm] = useState({ email: '', password: '', fullName: '', confirmPassword: '', marketingOptIn: false })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const [authAttempts, setAuthAttempts] = useState(0)
+  const [lockedUntil, setLockedUntil]   = useState(null)
 
   async function handleOAuth(provider) {
     setOauthLoading(provider)
