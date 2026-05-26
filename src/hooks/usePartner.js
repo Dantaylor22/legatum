@@ -11,18 +11,24 @@ export function usePartner() {
   const fetch = useCallback(async () => {
     if (!user) return
     setLoading(true)
+    // Include separation_pending so the grace-period UI (banner + review modal)
+    // can render. Without this, separating links are invisible to the client
+    // and CouplesPage falls through every condition with nothing on screen.
     const { data } = await supabase
       .from('partner_links')
       .select('*, requester:requester_id(id, full_name, plan), partner:partner_id(id, full_name, plan)')
       .or(`requester_id.eq.${user.id},partner_id.eq.${user.id}`)
-      .in('status', ['pending', 'accepted'])
+      .in('status', ['pending', 'accepted', 'separation_pending'])
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (data) {
       setLink(data)
       setPartner(data.requester_id === user.id ? data.partner : data.requester)
+    } else {
+      setLink(null)
+      setPartner(null)
     }
     setLoading(false)
   }, [user])
