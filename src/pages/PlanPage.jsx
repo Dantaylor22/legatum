@@ -207,8 +207,12 @@ export default function PlanPage() {
 
       {/* Downgrade confirmation modal */}
       {downgradeTarget && (() => {
-        const targetName = downgradeTarget === 'free' ? 'Free' : downgradeTarget === 'single' ? 'Single' : 'Couples'
+        const targetName    = downgradeTarget === 'free' ? 'Free' : downgradeTarget === 'single' ? 'Single' : 'Couples'
+        const currentName   = currentPlan === 'free' ? 'Free' : currentPlan === 'single' ? 'Single' : 'Couples'
         const isFromCouples = currentPlan === 'couples'
+        const renewalDate   = profile?.plan_renewal
+          ? new Date(profile.plan_renewal).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+          : null
         const losses = downgradeTarget === 'free' ? [
           'Vault entries above 5 will become inaccessible (not deleted)',
           'All uploaded documents will become inaccessible',
@@ -224,17 +228,21 @@ export default function PlanPage() {
         ] : []
         return (
         <div className="modal-overlay" onClick={() => setDowngradeTarget(null)}>
-          <div className="modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
               <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--cream)', marginBottom: 8 }}>
-                Downgrade to {targetName}?
+                {downgradeTarget === 'free' ? 'Cancel your subscription?' : `Switch to ${targetName}?`}
               </h2>
               <p style={{ fontSize: 13, color: 'var(--text-sub)', lineHeight: 1.6 }}>
-                You will lose access to the following:
+                {downgradeTarget === 'free'
+                  ? `You'll lose ${currentName} features below at the end of your current billing period.`
+                  : `You'll keep ${currentName} features below until you confirm in Stripe, then lose them on the new ${targetName} plan.`}
               </p>
             </div>
-            <div style={{ background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 20 }}>
+
+            {/* What changes */}
+            <div style={{ background: 'rgba(224,82,82,0.08)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 'var(--r)', padding: '16px 18px', marginBottom: 16 }}>
               {losses.map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '5px 0', fontSize: 13, color: 'var(--cream-dim)', lineHeight: 1.5 }}>
                   <span style={{ color: 'var(--danger)', flexShrink: 0 }}>✗</span>
@@ -242,19 +250,30 @@ export default function PlanPage() {
                 </div>
               ))}
             </div>
+
+            {/* What happens with your money — honest copy, no surprises */}
+            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: 'var(--cream)', fontWeight: 500, marginBottom: 8 }}>What happens with your billing</div>
+              {downgradeTarget === 'free' ? (
+                <div style={{ fontSize: 12, color: 'var(--cream-dim)', lineHeight: 1.7 }}>
+                  {renewalDate ? <>You've paid for {currentName} until <strong style={{ color: 'var(--text)' }}>{renewalDate}</strong>. </> : ''}
+                  When you click <em>Cancel subscription</em> on the next screen, Stripe stops auto-renewing your plan but you keep {currentName} access for the time you've already paid for. {renewalDate ? <>On <strong style={{ color: 'var(--text)' }}>{renewalDate}</strong> your account automatically becomes Free.</> : 'When that period ends, your account automatically becomes Free.'} We don't issue cash refunds for unused time, but you can resubscribe any time.
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--cream-dim)', lineHeight: 1.7 }}>
+                  Switching plan in Stripe is <strong style={{ color: 'var(--text)' }}>prorated automatically</strong>. The unused {renewalDate ? <>{currentName} time (you're paid through <strong style={{ color: 'var(--text)' }}>{renewalDate}</strong>) </> : `${currentName} time `}becomes account credit that Stripe applies to your upcoming {targetName} invoices — so you won't be charged for {targetName} until that credit runs out. No cash refund, but no double-charge either. Stripe will show you the exact figures on the next screen before you confirm.
+                </div>
+              )}
+            </div>
+
             {isFromCouples && hasActivePartner && (
-              <div style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', padding: '14px 16px', marginBottom: 20 }}>
-                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 500, marginBottom: 6 }}>Your partner will be notified</div>
+              <div style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid var(--gold-border)', borderRadius: 'var(--r)', padding: '14px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 500, marginBottom: 6 }}>Your partner is affected</div>
                 <div style={{ fontSize: 12, color: 'var(--cream-dim)', lineHeight: 1.6 }}>
-                  You're the Couples plan payer, so ending it ends your partner's coverage too. Stripe will let you change the plan and we'll send your partner a notification with their options. Any prepaid time on the Couples plan will be refunded pro-rata by Stripe.
+                  You're the payer on the Couples plan. Changing plan here in Stripe doesn't automatically end your Couples link — to do that, return to the <strong style={{ color: 'var(--text)' }}>Couples vault</strong> page and click <strong style={{ color: 'var(--text)' }}>Unlink</strong>. That starts a 14-day window for both of you to choose which shared entries to keep.
                 </div>
               </div>
             )}
-            <p style={{ fontSize: 12, color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 20 }}>
-              {downgradeTarget === 'free'
-                ? 'Your data is not deleted — if you upgrade again your vault entries and documents will be accessible again. The button below opens the Stripe billing portal where you cancel your subscription.'
-                : `The button below opens the Stripe billing portal where you can switch your subscription to ${targetName}. Stripe will prorate the difference automatically.`}
-            </p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-ghost" onClick={() => setDowngradeTarget(null)} style={{ flex: 1 }}>
                 Keep my current plan
